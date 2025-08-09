@@ -73,9 +73,13 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 def _resolve_time_range(days: int, from_ts: Optional[int], to_ts: Optional[int]) -> tuple[int, int]:
-    if from_ts and to_ts: return from_ts, to_ts
-    now = datetime.now(timezone.utc); start = now - timedelta(days=days)
-    return int(start.timestamp()), int(now.timestamp())
+    if from_ts and to_ts:
+        return from_ts, to_ts
+    now = datetime.now(timezone.utc)
+    end = now - timedelta(minutes=5)  # avoid ask for future dates
+    start = end - timedelta(days=days)
+    return int(start.timestamp()), int(end.timestamp())
+
 
 def main() -> None:
     load_dotenv()

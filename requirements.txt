@@ -4,3 +4,10 @@ python-dotenv>=1.0
 requests>=2.32
 tenacity>=8.3
 pytest>=8.2
+yfinance>=0.2.40
+python-binance>=1.0.19
+pandas-ta>=0.3.14b
+setuptools>=70.0
+wheel
+numpy<2.0
+
