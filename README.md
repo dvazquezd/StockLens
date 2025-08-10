@@ -117,6 +117,13 @@ Main dependencies:
 
 See `requirements.txt` for full list.
 
+## Roadmap
+ 
+ - `Quick backtesting for signals.`
+ - `Risk management (dynamic stop/tp).`
+ - `Aggregated metrics (hit ratio, max drawdown, sharpe).`
+ - `Light dashboard (Streamlit).`
+
 ## License
 
 This project is licensed under the MIT License.
