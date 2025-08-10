@@ -1,0 +1,8 @@
+[
+    { "symbol": "BTCUSDT", "source": "binance", "interval": "1d", "limit": 1000 },
+    { "symbol": "ETHUSDT", "source": "binance", "interval": "1d", "limit": 1000 },
+    { "symbol": "IITU.L",  "source": "yahoo",   "interval": "1d", "period": "1y" },
+    { "symbol": "CSPX.L",  "source": "yahoo",   "interval": "1d", "period": "1y" },
+    { "symbol": "NDX.L",   "source": "yahoo",   "interval": "1d", "period": "1y" },
+    { "symbol": "LYP3.L",  "source": "yahoo",   "interval": "1d", "period": "1y" }
+]

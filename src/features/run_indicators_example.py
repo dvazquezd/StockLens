@@ -1,11 +1,9 @@
 import os
 import pandas as pd
-from dotenv import load_dotenv
+from config.config import DATA_DIR
 
 from src.features.indicators import enrich_with_indicators
 
-load_dotenv()
-DATA_DIR = os.getenv("DATA_DIR", "./data")
 
 def main(symbol: str = "AAPL", interval: str = "1d"):
     raw_path = os.path.join(DATA_DIR, "raw", f"{symbol}_{interval}.parquet")

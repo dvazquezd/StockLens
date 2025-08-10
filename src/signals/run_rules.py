@@ -1,10 +1,8 @@
 import os
 import pandas as pd
-from dotenv import load_dotenv
+from config.config import DATA_DIR
 from src.signals.rules import make_recommendations, SignalConfig
 
-load_dotenv()
-DATA_DIR = os.getenv("DATA_DIR","./data")
 
 def main(symbol: str = "AAPL", interval: str = "1d"):
     path = os.path.join(DATA_DIR, "processed", f"{symbol}_{interval}_ind.parquet")

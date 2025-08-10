@@ -1,69 +1,54 @@
 import os
 import pandas as pd
 import yfinance as yf
-from binance.client import Client
-from dotenv import load_dotenv
-from datetime import datetime, timezone
+from pathlib import Path
+from config.config import RAW_PATH
 
-# --- Configuración ---
-load_dotenv()
-DATA_DIR = os.getenv("DATA_DIR", "./data")
-os.makedirs(os.path.join(DATA_DIR, "raw"), exist_ok=True)
 
-# --- Yahoo Finance: acciones y ETFs ---
-def download_yahoo(symbol: str, interval: str = "1d", period: str = "2y") -> pd.DataFrame:
+def download_yahoo(symbol: str, interval: str = "1d", period: str = "1y"):
     """
-    Descarga OHLCV desde Yahoo Finance.
-    interval: '1d', '1h', '15m', '5m', '1m'
-    period: '1y', '2y', '6mo', etc.
+    Descarga datos OHLCV de Yahoo Finance y los guarda en /data/raw
     """
-    print(f"Descargando {symbol} desde Yahoo Finance...")
-    ticker = yf.Ticker(symbol)
-    df = ticker.history(interval=interval, period=period)
+    os.makedirs(RAW_PATH, exist_ok=True)
+    df = yf.download(symbol, interval=interval, period=period)
+
     if df.empty:
-        raise ValueError(f"No se obtuvieron datos para {symbol} de Yahoo Finance.")
-    df = df.rename(columns={"Open": "open", "High": "high", "Low": "low",
-                            "Close": "close", "Volume": "volume"})
-    df["time"] = df.index.tz_convert(timezone.utc)
-    df = df[["time", "open", "high", "low", "close", "volume"]].reset_index(drop=True)
-    return df
+        raise ValueError(f"No se han podido descargar datos para {symbol} desde Yahoo.")
 
-# --- Binance: criptomonedas ---
-def download_binance(symbol: str, interval: str = "1d", limit: int = 500) -> pd.DataFrame:
+    df = df.reset_index()
+    df = df.rename(columns={
+        "Date": "time",
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Volume": "volume"
+    })
+    file_path = RAW_PATH / f"{symbol}_{interval}.parquet"
+    df[["time", "open", "high", "low", "close", "volume"]].to_parquet(file_path, index=False)
+
+    print(f"✅ Yahoo guardado: {file_path} ({len(df)} filas)")
+
+def download_binance(symbol: str, interval: str = "1d", limit: int = 1000):
     """
-    Descarga OHLCV desde Binance (mercado spot).
-    symbol: 'BTCUSDT', 'ETHUSDT', etc.
-    interval: '1d', '1h', '15m', '5m', '1m'
-    limit: número de velas (máx. 1000 por llamada)
+    Descarga datos OHLCV de Binance y los guarda en /data/raw
     """
-    print(f"Descargando {symbol} desde Binance...")
-    client = Client()
-    klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
-    if not klines:
-        raise ValueError(f"No se obtuvieron datos para {symbol} de Binance.")
-    df = pd.DataFrame(klines, columns=[
-        "time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_asset_volume", "trades",
-        "taker_buy_base", "taker_buy_quote", "ignore"
-    ])
-    df["time"] = pd.to_datetime(df["time"], unit="ms", utc=True)
-    df = df.astype({"open": float, "high": float, "low": float,
-                    "close": float, "volume": float})
-    df = df[["time", "open", "high", "low", "close", "volume"]]
-    return df
+    from src.data_ingestion.binance_client import save_ohlcv
+    save_ohlcv(symbol, interval, limit)
 
-# --- Guardar en Parquet ---
-def save_parquet(df: pd.DataFrame, filename: str):
-    out_path = os.path.join(DATA_DIR, "raw", filename)
-    df.to_parquet(out_path, index=False)
-    print(f"Datos guardados en {out_path}")
-
-# --- Ejemplo de uso ---
 if __name__ == "__main__":
-    # Acciones/ETFs
-    df_yahoo = download_yahoo("AAPL", interval="1d", period="1y")
-    save_parquet(df_yahoo, "AAPL_1d.parquet")
+    import argparse
 
-    # Cripto
-    df_binance = download_binance("BTCUSDT", interval="1d", limit=365)
-    save_parquet(df_binance, "BTCUSDT_1d.parquet")
+    parser = argparse.ArgumentParser(description="Descargar datos de mercado")
+    parser.add_argument("--symbol", type=str, required=True, help="Ticker del activo (ej: BTCUSDT o AAPL)")
+    parser.add_argument("--source", type=str, choices=["yahoo", "binance"], required=True, help="Fuente de datos")
+    parser.add_argument("--interval", type=str, default="1d", help="Intervalo (ej: 1d, 1h, 15m)")
+    parser.add_argument("--period", type=str, default="1y", help="Periodo para Yahoo (ej: 1y, 6mo)")
+    parser.add_argument("--limit", type=int, default=1000, help="Número máximo de velas (solo Binance)")
+
+    args = parser.parse_args()
+
+    if args.source == "yahoo":
+        download_yahoo(args.symbol, args.interval, args.period)
+    elif args.source == "binance":
+        download_binance(args.symbol, args.interval, args.limit)

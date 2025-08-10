@@ -1,14 +1,21 @@
 import argparse
-import os
-from binance.client import Client
 import pandas as pd
+import os
+from config.config import RAW_PATH
+from binance.client import Client
 
-RAW_PATH = "./data/raw"
 
 def get_binance_ohlcv(symbol: str, interval: str, limit: int = 1000) -> pd.DataFrame:
     """Descarga OHLCV de Binance y devuelve un DataFrame."""
     client = Client()  # Sin API key, solo datos públicos
-    klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
+    try:
+        klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
+    except Exception as e:
+        raise SystemExit(f"Error al descargar datos: {e}")
+    
+    if not klines:
+        raise SystemExit("Binance devolvió un resultado vacío.")
+    
     df = pd.DataFrame(klines, columns=[
         "time", "open", "high", "low", "close", "volume",
         "close_time", "quote_asset_volume", "number_of_trades",
@@ -18,12 +25,13 @@ def get_binance_ohlcv(symbol: str, interval: str, limit: int = 1000) -> pd.DataF
     df[["open","high","low","close","volume"]] = df[["open","high","low","close","volume"]].astype(float)
     return df[["time","open","high","low","close","volume"]]
 
+
 def save_ohlcv(symbol: str, interval: str, limit: int = 1000):
     os.makedirs(RAW_PATH, exist_ok=True)
     df = get_binance_ohlcv(symbol, interval, limit)
     file_path = os.path.join(RAW_PATH, f"{symbol}_{interval}.parquet")
     df.to_parquet(file_path, index=False)
-    print(f"✅ Guardado: {file_path} ({len(df)} filas)")
+    print(f"Guardado: {file_path} ({len(df)} filas)")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
