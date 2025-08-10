@@ -20,6 +20,8 @@ def run_agent_llm(processed_dir: Path, model: str = "gpt-4o-mini", provider: str
     - Normaliza 'time' a ISO (string) para evitar Timestamps no serializables
     - json.dumps(..., default=str) para cubrir tipos numpy/pandas
     """
+    print(f"\nEjecutando agente LLM con modelo {model} y proveedor {provider}")
+    
     items = []
     for f in sorted(processed_dir.glob("*_signals.parquet")):
         symbol = f.name.split("_")[0]
@@ -72,5 +74,5 @@ def run_agent_llm(processed_dir: Path, model: str = "gpt-4o-mini", provider: str
     output_text = resp.choices[0].message.content.strip()
     out = processed_dir / "agent_summary_llm.json"
     out.write_text(output_text, encoding="utf-8")
-    print(f"Agente LLM -> {out}")
+    print(f"Resultado del análisis realizado por {model} - {provider} en {out}")
     return output_text
