@@ -8,3 +8,6 @@ data/
 *.csv
 *.parquet
 learning.txt
+.vscode/
+.idea/
+*.log

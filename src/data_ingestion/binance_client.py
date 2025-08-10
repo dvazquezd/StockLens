@@ -1,43 +1,36 @@
-import argparse
-import pandas as pd
+# src/data_ingestion/binance_client.py
+from __future__ import annotations
 import os
+import pandas as pd
 from binance.client import Client
-from config.config import RAW_PATH
 
+def _get_client() -> Client:
+    # Para datos públicos no necesitas API key, pero si las tienes se usan.
+    key = os.getenv("BINANCE_API_KEY")
+    sec = os.getenv("BINANCE_API_SECRET")
+    return Client(api_key=key, api_secret=sec)
 
-def get_binance_ohlcv(symbol: str, interval: str, limit: int = 1000) -> pd.DataFrame:
-    """Descarga OHLCV de Binance y devuelve un DataFrame."""
-    client = Client()  # Sin API key, solo datos públicos
-    try:
-        klines = client.get_klines(symbol=symbol, interval=interval, limit=limit)
-    except Exception as e:
-        raise SystemExit(f"Error al descargar datos: {e}")
-    
-    if not klines:
-        raise SystemExit("Binance devolvió un resultado vacío.")
-    
-    df = pd.DataFrame(klines, columns=[
-        "time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_asset_volume", "number_of_trades",
-        "taker_buy_base", "taker_buy_quote", "ignore"
-    ])
-    df["time"] = pd.to_datetime(df["time"], unit="ms")
-    df[["open","high","low","close","volume"]] = df[["open","high","low","close","volume"]].astype(float)
-    return df[["time","open","high","low","close","volume"]]
+def download_ohlcv(symbol: str, interval: str, limit: int = 1000) -> pd.DataFrame:
+    """
+    Descarga OHLCV de Binance y devuelve un DataFrame con columnas:
+    time, open, high, low, close, volume
+    """
+    client = _get_client()
+    # python-binance acepta '1d', '1h', etc. directamente
+    kl = client.get_klines(symbol=symbol, interval=interval, limit=limit)
 
+    cols = [
+        "open_time","open","high","low","close","volume",
+        "close_time","quote_asset_volume","number_of_trades",
+        "taker_buy_base","taker_buy_quote","ignore",
+    ]
+    df = pd.DataFrame(kl, columns=cols)
 
-def save_ohlcv(symbol: str, interval: str, limit: int = 1000):
-    os.makedirs(RAW_PATH, exist_ok=True)
-    df = get_binance_ohlcv(symbol, interval, limit)
-    file_path = os.path.join(RAW_PATH, f"{symbol}_{interval}.parquet")
-    df.to_parquet(file_path, index=False)
-    print(f"Guardado: {file_path} ({len(df)} filas)")
+    # Tipos + timestamp
+    num_cols = ["open","high","low","close","volume"]
+    df[num_cols] = df[num_cols].astype(float)
+    df["time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--symbol", type=str, required=True, help="Símbolo, ej: ETHUSDT")
-    parser.add_argument("--interval", type=str, default="1d", help="Intervalo, ej: 1d, 1h, 15m")
-    parser.add_argument("--limit", type=int, default=1000, help="Número máximo de velas")
-    args = parser.parse_args()
-
-    save_ohlcv(args.symbol.upper(), args.interval, args.limit)
+    # Estandarizar a las columnas mínimas requeridas
+    out = df[["time","open","high","low","close","volume"]].sort_values("time").reset_index(drop=True)
+    return out

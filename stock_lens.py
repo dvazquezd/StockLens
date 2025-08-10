@@ -1,26 +1,121 @@
-import json, sys
-from config.config import DEFAULT_INTERVAL, DEFAULT_PERIOD, DEFAULT_LIMIT, ASSETS_CONFIG
+from __future__ import annotations
+import json
+from typing import Optional
+
+from config.config import ASSETS_CONFIG, DEFAULT_INTERVAL, DEFAULT_PERIOD, DEFAULT_LIMIT, PROCESSED_PATH, RAW_PATH
 from src.data_ingestion.market_data import download_market_data
-from src.features.run_indicators_example import run_indicators
-from src.signals.run_signals_example import run_signals
+from src.features.indicators import enrich_with_indicators
+from src.signals.signals import make_recommendations  # renombra tu módulo si aún es run_signals_example
 
 
-PY = sys.executable 
+def ensure_dirs():
+    """
+    Ensures that the raw and processed data directories exist.
 
+    This function creates the directories defined in `RAW_PATH` and `PROCESSED_PATH`
+    if they do not already exist, including all required parent folders.
+
+    Returns:
+        None
+    """
+    RAW_PATH.mkdir(parents=True, exist_ok=True)
+    PROCESSED_PATH.mkdir(parents=True, exist_ok=True)
+
+def pipeline(
+    symbol: str,
+    source: str,
+    interval: str,
+    limit: Optional[int] = None,
+    period: Optional[str] = None,
+    save_intermediate: bool = True,
+):
+    """
+    Executes the end-to-end data ingestion, feature engineering, and signal
+    generation pipeline for a given asset.
+
+    Steps:
+        1. Downloads raw market data for the specified asset from the given source.
+        2. Enriches the dataset with calculated technical indicators.
+        3. Optionally saves intermediate datasets (raw and enriched).
+        4. Generates trading signals based on enriched data.
+        5. Saves the final signals dataset.
+
+    Parameters:
+        symbol (str): The ticker or symbol of the asset (e.g., 'BTCUSDT', 'AAPL').
+        source (str): The data source identifier (e.g., 'binance', 'yahoo').
+        interval (str): The time interval for the market data (e.g., '1h', '1d').
+        limit (Optional[int]): Number of data points to retrieve (used by Binance).
+        period (Optional[str]): Time period for the data (used by Yahoo Finance).
+        save_intermediate (bool, optional): Whether to save raw and enriched datasets
+            to disk. Defaults to True.
+
+    Returns:
+        tuple: A tuple containing:
+            - DataFrame: The raw market data.
+            - DataFrame: The enriched market data with indicators.
+            - DataFrame: The generated trading signals.
+    """
+    df_raw = download_market_data(
+        symbol=symbol,
+        source=source,
+        interval=interval,
+        limit=limit,
+        period=period,
+        to_disk=save_intermediate,   
+        raw_dir=RAW_PATH,             
+    )
+
+    df_ind = enrich_with_indicators(df_raw)
+
+    if save_intermediate:
+        out_ind = PROCESSED_PATH / f"{symbol}_{interval}_ind.parquet"
+        df_ind.to_parquet(out_ind, index=False)
+        #print(f"{symbol} descargado y enriquecido {out_ind}")
+
+    df_sig = make_recommendations(df_ind)
+
+    out_sig = PROCESSED_PATH / f"{symbol}_{interval}_signals.parquet"
+    df_sig.to_parquet(out_sig, index=False)
+    print(f"{symbol} con señales guardado en {out_sig}")
+    #print(df_sig.tail(5).to_string(index=False))
+
+    return df_raw, df_ind, df_sig
 
 def main():
-    assets = json.load(ASSETS_CONFIG.open())
+    """
+    Orchestrates the execution of the trading data pipeline for all configured assets.
 
+    This function:
+        - Ensures required directories exist.
+        - Loads the asset configuration from `ASSETS_CONFIG`.
+        - Iterates over each configured asset and runs the `pipeline` function
+          according to its source type (Binance or Yahoo).
+        - Prints progress and warnings for unsupported sources.
+
+    Returns:
+        None
+    """
+    ensure_dirs()
+    with ASSETS_CONFIG.open(encoding="utf-8") as f:
+        assets = json.load(f)
+        
     for a in assets:
-        symbol = a["symbol"]
-        source = a["source"]
+        symbol   = a["symbol"]
+        source   = a["source"]
         interval = a.get("interval", DEFAULT_INTERVAL)
-        period = a.get("period", DEFAULT_PERIOD)
-        limit = a.get("limit", DEFAULT_LIMIT)
-        print(f"Descargando {symbol} desde {source} con intervalo {interval}, periodo {period}, límite {limit}")
-        download_market_data(symbol, source, interval, limit, period)
-        run_indicators(symbol, interval)
-        run_signals(symbol, interval)
+
+        if source == "binance":
+            limit = int(a.get("limit", DEFAULT_LIMIT))
+            print(f"\n=== {symbol} ({source}) ===")
+            pipeline(symbol, source, interval, limit=limit, period=None, save_intermediate=True)
+
+        elif source == "yahoo":
+            period = a.get("period", DEFAULT_PERIOD)
+            print(f"\n=== {symbol} ({source}) ===")
+            pipeline(symbol, source, interval, limit=None, period=period, save_intermediate=True)
+
+        else:
+            print(f"Aviso: source no soportado: {source}")
 
 if __name__ == "__main__":
     main()
