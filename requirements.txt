@@ -10,5 +10,6 @@ pandas-ta>=0.3.14b
 setuptools>=70,<81
 wheel
 numpy<2.0
+openai>=1.40.0
 
 

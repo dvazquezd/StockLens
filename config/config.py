@@ -15,4 +15,7 @@ DEFAULT_PERIOD = os.getenv("DEFAULT_PERIOD", "1y")
 RAW_PATH.mkdir(parents=True, exist_ok=True)
 PROCESSED_PATH.mkdir(parents=True, exist_ok=True)
 
-
+AGENT_MODE = os.getenv("AGENT_MODE", "llm").lower()  # "local" | "llm"
+LLM_MODEL  = os.getenv("LLM_MODEL", "gpt-4o-mini")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+PROMPT_PATH   = Path(os.getenv("PROMPT_PATH", "./config/agent_prompt.txt")).resolve()

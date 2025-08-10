@@ -1,8 +1,21 @@
 from __future__ import annotations
 import json
 from typing import Optional
+from src.agent.agent_local import run_agent_local
+from src.agent.agent_llm import run_agent_llm
 
-from config.config import ASSETS_CONFIG, DEFAULT_INTERVAL, DEFAULT_PERIOD, DEFAULT_LIMIT, PROCESSED_PATH, RAW_PATH
+from config.config import (
+    ASSETS_CONFIG,
+    DEFAULT_INTERVAL,
+    DEFAULT_PERIOD,
+    DEFAULT_LIMIT,
+    PROCESSED_PATH,
+    RAW_PATH,
+    AGENT_MODE,
+    LLM_MODEL,
+    LLM_PROVIDER
+)
+
 from src.data_ingestion.market_data import download_market_data
 from src.features.indicators import enrich_with_indicators
 from src.signals.signals import make_recommendations  # renombra tu módulo si aún es run_signals_example
@@ -81,6 +94,15 @@ def pipeline(
 
     return df_raw, df_ind, df_sig
 
+
+def run_agent():
+    if AGENT_MODE == "local":
+        run_agent_local(PROCESSED_PATH)
+    elif AGENT_MODE == "llm":
+        run_agent_llm(PROCESSED_PATH, model=LLM_MODEL, provider=LLM_PROVIDER)
+    else:
+        print(f"AGENT_MODE desconocido: {AGENT_MODE}. Usa 'local' o 'llm'.")
+
 def main():
     """
     Orchestrates the execution of the trading data pipeline for all configured assets.
@@ -116,6 +138,8 @@ def main():
 
         else:
             print(f"Aviso: source no soportado: {source}")
+            
+    run_agent()
 
 if __name__ == "__main__":
     main()
