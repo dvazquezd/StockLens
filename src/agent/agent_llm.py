@@ -2,23 +2,55 @@ from pathlib import Path
 import os
 import json
 import pandas as pd
+from openai import OpenAI
 from config.config import PROMPT_PATH
 
 
 def load_prompt() -> str:
+    """
+    Loads the base LLM prompt text from the configured prompt file path.
+
+    The path to the prompt file is defined in the global `PROMPT_PATH` constant
+    from the configuration module. The file is read using UTF-8 encoding.
+
+    Returns:
+        str: The full prompt text as a string.
+
+    Raises:
+        FileNotFoundError: If the prompt file does not exist at `PROMPT_PATH`.
+        UnicodeDecodeError: If the file cannot be decoded with UTF-8 encoding.
+    """
     return PROMPT_PATH.read_text(encoding="utf-8")
 
 
 def run_agent_llm(processed_dir: Path, model: str = "gpt-4o-mini", provider: str = "openai"):
     """
-    Agente LLM:
-    - Carga las últimas N filas de cada *_signals.parquet
-    - Si no hay OPENAI_API_KEY, guarda un draft JSON offline
-    - Si hay API key, llama al proveedor y guarda la salida
+    Runs an LLM-based analysis agent on the latest generated trading signals.
 
-    Cambios clave:
-    - Normaliza 'time' a ISO (string) para evitar Timestamps no serializables
-    - json.dumps(..., default=str) para cubrir tipos numpy/pandas
+    This function:
+        1. Loads the last 5 rows from each `*_signals.parquet` file in the processed
+           data directory.
+        2. Normalizes the `time` column to ISO 8601 string format for JSON compatibility.
+        3. If no API key (`OAIKEY`) is found, generates and saves an offline draft JSON
+           file containing the most recent signals.
+        4. If an API key is available, calls the specified LLM provider/model with a
+           base prompt and the loaded signal data, then saves the model's output to disk.
+
+    Parameters:
+        processed_dir (Path): Path to the directory containing processed `*_signals.parquet` files.
+        model (str, optional): The LLM model name to use for analysis.
+            Defaults to `"gpt-4o-mini"`.
+        provider (str, optional): The LLM provider identifier (e.g., `"openai"`).
+            Defaults to `"openai"`.
+
+    Returns:
+        dict | str: 
+            - If no API key is found, returns the offline draft summary as a dictionary.
+            - If an API call is made, returns the model's output text.
+
+    Raises:
+        FileNotFoundError: If the processed directory does not contain any `*_signals.parquet` files.
+        ValueError: If loaded parquet files are missing the `time` column or are unreadable.
     """
     print(f"\nEjecutando agente LLM con modelo {model} y proveedor {provider}")
     
@@ -61,7 +93,6 @@ def run_agent_llm(processed_dir: Path, model: str = "gpt-4o-mini", provider: str
     payload = f"{base_prompt}\n\nHere is the data:\n{assets_json}"
 
     # Llamada a OpenAI (requiere openai>=1.x instalado)
-    from openai import OpenAI
     client = OpenAI(api_key=api_key)
     resp = client.chat.completions.create(
         model=model,

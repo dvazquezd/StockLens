@@ -96,6 +96,21 @@ def pipeline(
 
 
 def run_agent():
+    """
+    Executes the trading or analysis agent according to the configured mode.
+
+    This function checks the global `AGENT_MODE` setting and runs the
+    corresponding agent implementation:
+
+        - `"local"`: Runs the locally implemented agent using `run_agent_local`.
+        - `"llm"`: Runs the LLM-based agent using `run_agent_llm` with the
+          configured `LLM_MODEL` and `LLM_PROVIDER`.
+
+    The processed data path (`PROCESSED_PATH`) is passed to both agent types.
+
+    Raises:
+        ValueError: If `AGENT_MODE` is set to an unsupported value.
+    """
     if AGENT_MODE == "local":
         run_agent_local(PROCESSED_PATH)
     elif AGENT_MODE == "llm":
