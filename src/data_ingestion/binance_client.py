@@ -1,8 +1,8 @@
 import argparse
 import pandas as pd
 import os
-from config.config import RAW_PATH
 from binance.client import Client
+from config.config import RAW_PATH
 
 
 def get_binance_ohlcv(symbol: str, interval: str, limit: int = 1000) -> pd.DataFrame:

@@ -1,65 +1,26 @@
-import json
-import subprocess
-from pathlib import Path
+import json, sys
+from config.config import DEFAULT_INTERVAL, DEFAULT_PERIOD, DEFAULT_LIMIT, ASSETS_CONFIG
+from src.data_ingestion.market_data import download_market_data
+from src.features.run_indicators_example import run_indicators
+from src.signals.run_signals_example import run_signals
 
-CONFIG_FILE = Path("assets_config.json")
 
-def run_command(cmd):
-    """Ejecuta un comando en terminal y muestra la salida en tiempo real"""
-    print(f"\n▶ Ejecutando: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    print(result.stdout)
-    if result.stderr:
-        print(result.stderr)
+PY = sys.executable 
+
 
 def main():
-    if not CONFIG_FILE.exists():
-        raise FileNotFoundError(f"No se encontró {CONFIG_FILE}")
+    assets = json.load(ASSETS_CONFIG.open())
 
-    with open(CONFIG_FILE, "r") as f:
-        assets = json.load(f)
-
-    for asset in assets:
-        symbol = asset["symbol"]
-        source = asset["source"]
-        interval = asset.get("interval", "1d")
-
-        # Descarga datos
-        if source == "binance":
-            limit = str(asset.get("limit", 1000))
-            run_command([
-                "python", "market_data.py",
-                "--symbol", symbol,
-                "--source", "binance",
-                "--interval", interval,
-                "--limit", limit
-            ])
-        elif source == "yahoo":
-            period = asset.get("period", "1y")
-            run_command([
-                "python", "market_data.py",
-                "--symbol", symbol,
-                "--source", "yahoo",
-                "--interval", interval,
-                "--period", period
-            ])
-        else:
-            print(f"⚠ Fuente desconocida para {symbol}")
-            continue
-
-        # Calcula indicadores
-        run_command([
-            "python", "-m", "src.features.run_indicators_example",
-            "--symbol", symbol,
-            "--interval", interval
-        ])
-
-        # Calcula señales
-        run_command([
-            "python", "-m", "src.signals.run_signals_example",
-            "--symbol", symbol,
-            "--interval", interval
-        ])
+    for a in assets:
+        symbol = a["symbol"]
+        source = a["source"]
+        interval = a.get("interval", DEFAULT_INTERVAL)
+        period = a.get("period", DEFAULT_PERIOD)
+        limit = a.get("limit", DEFAULT_LIMIT)
+        print(f"Descargando {symbol} desde {source} con intervalo {interval}, periodo {period}, límite {limit}")
+        download_market_data(symbol, source, interval, limit, period)
+        run_indicators(symbol, interval)
+        run_signals(symbol, interval)
 
 if __name__ == "__main__":
     main()

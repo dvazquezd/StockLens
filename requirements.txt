@@ -7,7 +7,8 @@ pytest>=8.2
 yfinance>=0.2.40
 python-binance>=1.0.19
 pandas-ta>=0.3.14b
-setuptools>=70.0
+setuptools>=70,<81
 wheel
 numpy<2.0
+
 
