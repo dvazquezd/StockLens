@@ -16,6 +16,8 @@ RAW_PATH.mkdir(parents=True, exist_ok=True)
 PROCESSED_PATH.mkdir(parents=True, exist_ok=True)
 
 AGENT_MODE = os.getenv("AGENT_MODE", "llm").lower()  # "local" | "llm"
-LLM_MODEL  = os.getenv("LLM_MODEL", "gpt-4o-mini")
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+#LLM_MODEL  = os.getenv("LLM_MODEL", "gpt-4o-mini")
+#LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+LLM_MODEL  = os.getenv("LLM_MODEL", "claude-opus-4-1-20250805")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
 PROMPT_PATH   = Path(os.getenv("PROMPT_PATH", "./config/agent_prompt.txt")).resolve()
