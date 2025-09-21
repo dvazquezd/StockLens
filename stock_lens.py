@@ -11,7 +11,7 @@ def main() -> None:
         print("\n=== Pipeline execution completed successfully ===")
         
     except Exception as e:
-        print(f"\n=== Pipeline execution failed ===")
+        print("\n=== Pipeline execution failed ===")
         print(f"Error: {e}")
         raise
 
