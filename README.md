@@ -84,25 +84,24 @@ Uses OpenAI API to generate recommendations and rationale in structured JSON for
 ## Project Structure
 
 ```
-StockLens/
-│
-├── config/                 # Configuration files
-│   ├── agent_prompt.txt
-│   └── assets_config.json
-│
-├── data/                   # Output folders
-│   ├── raw/
-│   └── processed/
-│
-├── src/                    # Source code
-│   ├── agent/              # Agents (local + LLM)
-│   ├── data_ingestion/     # Market data download
-│   ├── features/           # Indicators computation
-│   └── signals/            # Trading signals
-│
-├── stock_lens.py           # Main script
-├── requirements.txt
-└── README.md
+src/
+├── pipeline/
+│   └── trading_pipeline.py      # Orquestación principal
+├── data_ingestion/
+│   ├── market_data.py           # Descarga y normalización
+│   └── binance_client.py        # Cliente Binance específico
+├── features/
+│   └── indicators.py            # Cálculo de indicadores técnicos
+├── signals/
+│   └── signal_generator.py      # Generación de señales (reemplaza signals.py)
+└── agent/
+    ├── llm_agent.py            # Agente LLM refactorizado
+    └── local_agent.py          # Agente local refactorizado
+
+config/
+└── config.py                   # Configuración centralizada
+
+main.py                         # Punto de entrada principal
 ```
 
 ## Requirements
@@ -113,6 +112,7 @@ Main dependencies:
 - `pandas_ta`
 - `pyarrow`
 - `openai` (for LLM mode)
+- `anthropic` (for LLM mode)
 - `python-dotenv`
 
 See `requirements.txt` for full list.

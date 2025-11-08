@@ -42,8 +42,8 @@ class LLMTradingAgent:
         """Load the base prompt template from configuration file."""
         try:
             return PROMPT_FILE_PATH.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Prompt file not found: {PROMPT_FILE_PATH}")
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(f"Prompt file not found: {PROMPT_FILE_PATH}") from exc
     
     def _prepare_signal_data(self, processed_directory: Path) -> List[Dict]:
         """
