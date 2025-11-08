@@ -72,6 +72,52 @@ def load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
 
 
+def _extract_json_from_response(text: str) -> str:
+    """
+    Extracts JSON content from LLM response that may contain markdown or extra text.
+
+    This function attempts to extract JSON using multiple strategies:
+        1. Removes markdown code blocks (```json, ```)
+        2. Uses regex to find JSON array/object patterns
+        3. Strips whitespace and non-JSON content
+
+    Parameters:
+        text (str): The raw LLM response text
+
+    Returns:
+        str: The extracted JSON string
+
+    Raises:
+        ValueError: If no valid JSON structure is found in the response
+    """
+    # Remove markdown code blocks
+    cleaned = text.strip()
+
+    # Remove ```json or ``` markers
+    cleaned = re.sub(r'^```json\s*', '', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r'^```\s*', '', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE)
+    cleaned = cleaned.strip()
+
+    # Try to find JSON array or object using regex
+    # Look for patterns like [{...}] or {...}
+    json_array_pattern = r'\[\s*\{.*?\}\s*\]'
+    json_object_pattern = r'\{.*?\}'
+
+    # Try to match JSON array first (most common for this use case)
+    match = re.search(json_array_pattern, cleaned, re.DOTALL)
+    if match:
+        return match.group(0)
+
+    # Try to match JSON object
+    match = re.search(json_object_pattern, cleaned, re.DOTALL)
+    if match:
+        return match.group(0)
+
+    # If no pattern matched, return cleaned text and let json.loads fail with better error
+    return cleaned
+
+
 def run_agent_llm(processed_dir: Path, model: str = "gpt-4o-mini", provider: str = "openai"):
     """
     Runs an LLM-based analysis agent on the latest generated trading signals.
