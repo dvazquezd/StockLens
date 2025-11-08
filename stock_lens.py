@@ -127,34 +127,87 @@ def main():
         - Loads the asset configuration from `ASSETS_CONFIG`.
         - Iterates over each configured asset and runs the `pipeline` function
           according to its source type (Binance or Yahoo).
-        - Prints progress and warnings for unsupported sources.
+        - Handles errors gracefully, allowing other assets to continue processing
+          even if one fails.
+        - Prints progress, errors, and warnings.
 
     Returns:
         None
     """
     ensure_dirs()
-    with ASSETS_CONFIG.open(encoding="utf-8") as f:
-        assets = json.load(f)
-        
-    for a in assets:
-        symbol   = a["symbol"]
-        source   = a["source"]
-        interval = a.get("interval", DEFAULT_INTERVAL)
 
-        if source == "binance":
-            limit = int(a.get("limit", DEFAULT_LIMIT))
-            print(f"\n=== {symbol} ({source}) ===")
-            pipeline(symbol, source, interval, limit=limit, period=None, save_intermediate=True)
+    try:
+        with ASSETS_CONFIG.open(encoding="utf-8") as f:
+            assets = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: No se encontró el archivo de configuración: {ASSETS_CONFIG}")
+        return
+    except json.JSONDecodeError as e:
+        print(f"Error: El archivo de configuración no es un JSON válido: {e}")
+        return
 
-        elif source == "yahoo":
-            period = a.get("period", DEFAULT_PERIOD)
-            print(f"\n=== {symbol} ({source}) ===")
-            pipeline(symbol, source, interval, limit=None, period=period, save_intermediate=True)
+    if not assets:
+        print("Aviso: No hay assets configurados en el archivo de configuración")
+        return
 
-        else:
-            print(f"Aviso: source no soportado: {source}")
-            
-    run_agent()
+    # Track processing statistics
+    total_assets = len(assets)
+    successful = 0
+    failed = 0
+    skipped = 0
+
+    for idx, a in enumerate(assets, 1):
+        try:
+            symbol = a.get("symbol")
+            source = a.get("source")
+
+            if not symbol or not source:
+                print(f"\nAviso [{idx}/{total_assets}]: Asset sin 'symbol' o 'source', saltando: {a}")
+                skipped += 1
+                continue
+
+            interval = a.get("interval", DEFAULT_INTERVAL)
+
+            if source == "binance":
+                limit = int(a.get("limit", DEFAULT_LIMIT))
+                print(f"\n=== [{idx}/{total_assets}] {symbol} ({source}) ===")
+                pipeline(symbol, source, interval, limit=limit, period=None, save_intermediate=True)
+                successful += 1
+
+            elif source == "yahoo":
+                period = a.get("period", DEFAULT_PERIOD)
+                print(f"\n=== [{idx}/{total_assets}] {symbol} ({source}) ===")
+                pipeline(symbol, source, interval, limit=None, period=period, save_intermediate=True)
+                successful += 1
+
+            else:
+                print(f"\nAviso [{idx}/{total_assets}]: source no soportado '{source}' para {symbol}")
+                skipped += 1
+
+        except Exception as e:
+            failed += 1
+            symbol_info = a.get("symbol", "unknown")
+            print(f"\n❌ Error procesando {symbol_info}: {type(e).__name__}: {e}")
+            print(f"   Continuando con el siguiente asset...")
+
+    # Print summary
+    print(f"\n{'='*60}")
+    print(f"RESUMEN DE PROCESAMIENTO:")
+    print(f"  Total: {total_assets} assets")
+    print(f"  ✓ Exitosos: {successful}")
+    print(f"  ✗ Fallidos: {failed}")
+    print(f"  ⊘ Saltados: {skipped}")
+    print(f"{'='*60}\n")
+
+    # Only run agent if at least one asset was successful
+    if successful > 0:
+        try:
+            run_agent()
+        except Exception as e:
+            print(f"\n❌ Error ejecutando agente: {type(e).__name__}: {e}")
+            print("   Los datos procesados están guardados, pero el agente no pudo ejecutarse.")
+    else:
+        print("No se procesó ningún asset exitosamente. Saltando ejecución del agente.")
 
 if __name__ == "__main__":
     main()

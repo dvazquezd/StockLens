@@ -1,10 +1,58 @@
 from pathlib import Path
 import os
 import json
+import re
 import pandas as pd
+from datetime import datetime
 from openai import OpenAI
 from anthropic import Anthropic
 from config.config import PROMPT_PATH
+
+
+def _extract_json_from_response(text: str) -> str:
+    """
+    Extracts JSON content from LLM response that may contain markdown or extra text.
+
+    This function attempts to extract JSON using multiple strategies:
+        1. Removes markdown code blocks (```json, ```)
+        2. Uses regex to find JSON array/object patterns
+        3. Strips whitespace and non-JSON content
+
+    Parameters:
+        text (str): The raw LLM response text
+
+    Returns:
+        str: The extracted JSON string
+
+    Raises:
+        ValueError: If no valid JSON structure is found in the response
+    """
+    # Remove markdown code blocks
+    cleaned = text.strip()
+
+    # Remove ```json or ``` markers
+    cleaned = re.sub(r'^```json\s*', '', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r'^```\s*', '', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r'\s*```$', '', cleaned, flags=re.MULTILINE)
+    cleaned = cleaned.strip()
+
+    # Try to find JSON array or object using regex
+    # Look for patterns like [{...}] or {...}
+    json_array_pattern = r'\[\s*\{.*?\}\s*\]'
+    json_object_pattern = r'\{.*?\}'
+
+    # Try to match JSON array first (most common for this use case)
+    match = re.search(json_array_pattern, cleaned, re.DOTALL)
+    if match:
+        return match.group(0)
+
+    # Try to match JSON object
+    match = re.search(json_object_pattern, cleaned, re.DOTALL)
+    if match:
+        return match.group(0)
+
+    # If no pattern matched, return cleaned text and let json.loads fail with better error
+    return cleaned
 
 
 def load_prompt() -> str:
@@ -131,40 +179,59 @@ def run_agent_llm(processed_dir: Path, model: str = "gpt-4o-mini", provider: str
         # Extraer texto de la respuesta de OpenAI
         response_text = resp.choices[0].message.content
 
-    # Intentar parsear la respuesta como JSON
+    # Parse and validate the JSON response
     try:
-        # Limpiar posibles markdown o texto extra
-        cleaned_response = response_text.strip()
-        if cleaned_response.startswith('```json'):
-            cleaned_response = cleaned_response.replace('```json', '').replace('```', '').strip()
-        elif cleaned_response.startswith('```'):
-            cleaned_response = cleaned_response.replace('```', '').strip()
-            
+        # Extract JSON from response using robust parser
+        cleaned_response = _extract_json_from_response(response_text)
         response_json = json.loads(cleaned_response)
-        
-        # Guardar directamente el JSON parseado
+
+        # Validate response structure
+        if not isinstance(response_json, list):
+            raise ValueError(f"Expected JSON array, got {type(response_json).__name__}")
+
+        # Validate each recommendation has required fields
+        required_fields = {"symbol", "recommendation", "rationale"}
+        for idx, item in enumerate(response_json):
+            if not isinstance(item, dict):
+                raise ValueError(f"Item {idx} is not a dict: {type(item).__name__}")
+
+            missing_fields = required_fields - set(item.keys())
+            if missing_fields:
+                raise ValueError(f"Item {idx} missing fields: {missing_fields}")
+
+            # Validate recommendation value
+            valid_recommendations = {"buy", "sell", "hold"}
+            rec = item.get("recommendation", "").lower()
+            if rec not in valid_recommendations:
+                print(f"Warning: Invalid recommendation '{rec}' in {item.get('symbol')}. Defaulting to 'hold'.")
+                item["recommendation"] = "hold"
+
+        # Save successfully parsed and validated JSON
         out = processed_dir / "agent_summary_llm.json"
         out.write_text(json.dumps(response_json, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         print(f"Agente LLM ({provider}) -> {out}")
-        
+        print(f"Successfully processed {len(response_json)} recommendations")
+
         return response_json
-        
-    except json.JSONDecodeError as e:
+
+    except (json.JSONDecodeError, ValueError) as e:
         print(f"Error al parsear JSON del {provider}: {e}")
-        print(f"Respuesta original: {response_text}")
-        
-        # Fallback: guardar respuesta como texto
+        print(f"Respuesta original (primeros 500 chars): {response_text[:500]}...")
+
+        # Fallback: save response as error document for debugging
         fallback = {
             "provider": provider,
             "model": model,
             "timestamp": datetime.now().isoformat(),
-            "error": "Failed to parse JSON response",
+            "error": str(e),
+            "error_type": type(e).__name__,
             "raw_response": response_text,
             "assets_analyzed": len(items)
         }
-        
+
         out = processed_dir / "agent_summary_llm_error.json"
         out.write_text(json.dumps(fallback, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
         print(f"Agente LLM (error fallback) -> {out}")
-        
-        return response_text
+        print("Revisa el archivo de error para debugging")
+
+        return fallback
