@@ -1,4 +1,22 @@
 [
-  { "symbol": "META",  "source": "yahoo",   "interval": "1d", "period": "1y", "in_portfolio": true },
-  { "symbol": "NVDA",  "source": "yahoo",   "interval": "1d", "period": "1y", "in_portfolio": true }
+  {
+    "symbol": "META",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": true,
+    "purchase_date": "2024-01-15",
+    "purchase_price": 387.50,
+    "shares": 10
+  },
+  {
+    "symbol": "NVDA",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": true,
+    "purchase_date": "2024-02-20",
+    "purchase_price": 722.00,
+    "shares": 5
+  }
 ]

@@ -63,6 +63,35 @@
         <section id="assets">
             <h2 class="section-title">Portfolio Analysis — {{ current_date }}</h2>
 
+            <!-- Portfolio Summary -->
+            {% if portfolio_summary.has_portfolio %}
+            <div class="portfolio-summary">
+                <h3 class="summary-title">Portfolio Performance</h3>
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <div class="summary-label">Total Value</div>
+                        <div class="summary-value">${{ "%.2f"|format(portfolio_summary.total_current_value) }}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Cost Basis</div>
+                        <div class="summary-value">${{ "%.2f"|format(portfolio_summary.total_cost_basis) }}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">P&L Amount</div>
+                        <div class="summary-value {% if portfolio_summary.total_pnl_amount >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}">
+                            ${{ "%.2f"|format(portfolio_summary.total_pnl_amount) }}
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">P&L Percentage</div>
+                        <div class="summary-value {% if portfolio_summary.total_pnl_percent >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}">
+                            {{ "%.2f"|format(portfolio_summary.total_pnl_percent) }}%
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="assets-grid">
                 {% for asset in assets %}
                 <div class="asset-card {% if asset.in_portfolio %}in-portfolio{% endif %}">
@@ -80,6 +109,39 @@
 
                     <div class="asset-body">
                         <div class="asset-price">{{ asset.close }}</div>
+
+                        {% if asset.in_portfolio and asset.pnl_amount is defined %}
+                        <div class="portfolio-details">
+                            <div class="portfolio-grid">
+                                <div class="portfolio-metric">
+                                    <span class="metric-label">Purchase Date</span>
+                                    <span class="metric-value">{{ asset.purchase_date }}</span>
+                                </div>
+                                <div class="portfolio-metric">
+                                    <span class="metric-label">Purchase Price</span>
+                                    <span class="metric-value">${{ "%.2f"|format(asset.purchase_price) }}</span>
+                                </div>
+                                <div class="portfolio-metric">
+                                    <span class="metric-label">Shares</span>
+                                    <span class="metric-value">{{ asset.shares }}</span>
+                                </div>
+                                <div class="portfolio-metric">
+                                    <span class="metric-label">Cost Basis</span>
+                                    <span class="metric-value">${{ "%.2f"|format(asset.cost_basis) }}</span>
+                                </div>
+                                <div class="portfolio-metric">
+                                    <span class="metric-label">Current Value</span>
+                                    <span class="metric-value">${{ "%.2f"|format(asset.current_value) }}</span>
+                                </div>
+                                <div class="portfolio-metric">
+                                    <span class="metric-label">P&L</span>
+                                    <span class="metric-value {% if asset.pnl_amount >= 0 %}pnl-positive{% else %}pnl-negative{% endif %}">
+                                        ${{ "%.2f"|format(asset.pnl_amount) }} ({{ "%.2f"|format(asset.pnl_percent) }}%)
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
 
                         <div class="asset-indicators">
                             <div class="indicator">

@@ -138,6 +138,9 @@ class DashboardGenerator:
             asset_data = self._prepare_asset_data(db, signal, target_date)
             assets.append(asset_data)
 
+        # Calculate portfolio summary
+        portfolio_summary = self._calculate_portfolio_summary(assets)
+
         # Render template
         template = self.jinja_env.get_template("index.html")
         html_content = template.render(
@@ -149,6 +152,7 @@ class DashboardGenerator:
             assets=assets,
             historical_dates=all_dates,
             trend_data=trend_data,
+            portfolio_summary=portfolio_summary,
             generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         )
 
@@ -279,27 +283,84 @@ class DashboardGenerator:
 
         return json.dumps(traces)
 
+    def _calculate_portfolio_summary(self, assets: List[Dict]) -> Dict:
+        """Calculate portfolio-wide P&L summary."""
+        portfolio_assets = [a for a in assets if a.get('in_portfolio', False)]
+
+        if not portfolio_assets:
+            return {
+                'has_portfolio': False,
+                'total_cost_basis': 0,
+                'total_current_value': 0,
+                'total_pnl_amount': 0,
+                'total_pnl_percent': 0,
+                'portfolio_count': 0
+            }
+
+        total_cost = sum(a.get('cost_basis', 0) for a in portfolio_assets)
+        total_value = sum(a.get('current_value', 0) for a in portfolio_assets)
+        total_pnl = total_value - total_cost
+        total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
+
+        return {
+            'has_portfolio': True,
+            'total_cost_basis': total_cost,
+            'total_current_value': total_value,
+            'total_pnl_amount': total_pnl,
+            'total_pnl_percent': total_pnl_pct,
+            'portfolio_count': len(portfolio_assets)
+        }
+
     def _prepare_asset_data(
         self,
         db: MarketDatabase,
         signal: Dict,
         target_date: str
     ) -> Dict:
-        """Prepare asset data including rationale and chart."""
+        """Prepare asset data including rationale, chart, and P&L."""
         # Get rationale from LLM analysis if available
         rationale = self._get_rationale(db, signal['symbol'], target_date)
         signal['rationale'] = rationale
 
-        # Generate price chart
-        chart_data = self._generate_asset_chart(db, signal['symbol'])
-        signal['chart_data'] = chart_data
-
-        # Add portfolio status
+        # Add portfolio status and P&L calculations
         symbol = signal['symbol']
         if symbol in self.assets_config:
-            signal['in_portfolio'] = self.assets_config[symbol].get('in_portfolio', False)
+            asset_config = self.assets_config[symbol]
+            signal['in_portfolio'] = asset_config.get('in_portfolio', False)
+
+            # Calculate P&L if in portfolio
+            if signal['in_portfolio']:
+                purchase_price = asset_config.get('purchase_price')
+                shares = asset_config.get('shares', 0)
+                purchase_date = asset_config.get('purchase_date')
+
+                if purchase_price and shares:
+                    # Get current price from signal
+                    try:
+                        current_price = float(signal['close'].replace(',', '').replace('$', ''))
+                    except (ValueError, AttributeError):
+                        current_price = float(signal['close']) if isinstance(signal['close'], (int, float)) else 0
+
+                    # Calculate P&L
+                    cost_basis = purchase_price * shares
+                    current_value = current_price * shares
+                    pnl_amount = current_value - cost_basis
+                    pnl_percent = (pnl_amount / cost_basis * 100) if cost_basis > 0 else 0
+
+                    signal['purchase_price'] = purchase_price
+                    signal['shares'] = shares
+                    signal['purchase_date'] = purchase_date
+                    signal['cost_basis'] = cost_basis
+                    signal['current_value'] = current_value
+                    signal['pnl_amount'] = pnl_amount
+                    signal['pnl_percent'] = pnl_percent
+                    signal['current_price'] = current_price
         else:
             signal['in_portfolio'] = False
+
+        # Generate price chart (with purchase price line if in portfolio)
+        chart_data = self._generate_asset_chart(db, signal['symbol'], signal.get('purchase_price'))
+        signal['chart_data'] = chart_data
 
         return signal
 
@@ -361,7 +422,7 @@ class DashboardGenerator:
 
         return "; ".join(reasons)
 
-    def _generate_asset_chart(self, db: MarketDatabase, symbol: str) -> str:
+    def _generate_asset_chart(self, db: MarketDatabase, symbol: str, purchase_price: float = None) -> str:
         """Generate Plotly chart data for asset price history."""
         # Get last 30 days of price data
         query = """
@@ -383,15 +444,32 @@ class DashboardGenerator:
         times = [row[0] for row in results]
         closes = [row[1] for row in results]
 
-        trace = [{
+        traces = [{
             'x': times,
             'y': closes,
             'type': 'scatter',
             'mode': 'lines',
+            'name': 'Price',
             'line': {'color': '#000000', 'width': 1.2},
             'fill': 'tozeroy',
             'fillcolor': 'rgba(0, 0, 0, 0.03)',
             'showlegend': False
         }]
 
-        return json.dumps(trace)
+        # Add purchase price line if available
+        if purchase_price:
+            traces.append({
+                'x': times,
+                'y': [purchase_price] * len(times),
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': 'Purchase Price',
+                'line': {
+                    'color': '#8B8B8B',
+                    'width': 1,
+                    'dash': 'dash'
+                },
+                'showlegend': False
+            })
+
+        return json.dumps(traces)
