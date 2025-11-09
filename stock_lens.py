@@ -1,3 +1,5 @@
+"""Main entry point for StockLens trading analysis system."""
+
 from __future__ import annotations
 import json
 from typing import Optional
@@ -20,6 +22,7 @@ from src.data_ingestion.market_data import download_market_data, download_market
 from src.features.indicators import enrich_with_indicators
 from src.signals.signals import make_recommendations
 from src.database.market_db import MarketDatabase
+from src.pipeline.trading_pipeline import TradingAnalysisPipeline
 
 
 def ensure_dirs():
@@ -47,7 +50,7 @@ def pipeline(
 ):
     """
     Executes the end-to-end data ingestion, feature engineering, and signal
-    generation pipeline for a given asset.
+    generation pipeline for a given asset. (Backward compatibility wrapper)
 
     Steps:
         1. Downloads raw market data (with intelligent caching).
@@ -72,52 +75,16 @@ def pipeline(
             - DataFrame: The enriched market data with indicators.
             - DataFrame: The generated trading signals.
     """
-    # Download data with caching
-    if use_cache:
-        df_raw = download_market_data_cached(
-            symbol=symbol,
-            source=source,
-            interval=interval,
-            limit=limit,
-            period=period,
-            use_cache=True,
-            db_path=db_path,
-        )
-    else:
-        df_raw = download_market_data(
-            symbol=symbol,
-            source=source,
-            interval=interval,
-            limit=limit,
-            period=period,
-            to_disk=save_intermediate,
-            raw_dir=RAW_PATH,
-        )
-
-    # Calculate indicators
-    df_ind = enrich_with_indicators(df_raw)
-
-    # Generate signals
-    df_sig = make_recommendations(df_ind)
-
-    # Save to database
-    if use_cache:
-        with MarketDatabase(db_path) as db:
-            # Indicators already have 'time' column from df_raw
-            indicators_saved = db.insert_indicators(df_ind, symbol, source, interval)
-            signals_saved = db.insert_signals(df_sig, symbol, source, interval)
-            print(f"💾 {symbol}: Saved {indicators_saved} indicators, {signals_saved} signals to database")
-
-    # Optionally save to parquet files
-    if save_intermediate:
-        out_ind = PROCESSED_PATH / f"{symbol}_{interval}_ind.parquet"
-        df_ind.to_parquet(out_ind, index=False)
-
-        out_sig = PROCESSED_PATH / f"{symbol}_{interval}_signals.parquet"
-        df_sig.to_parquet(out_sig, index=False)
-        print(f"📄 {symbol}: Saved parquet files")
-
-    return df_raw, df_ind, df_sig
+    # Use the OOP pipeline internally
+    pipeline_obj = TradingAnalysisPipeline(db_path=db_path, use_cache=use_cache)
+    return pipeline_obj.run_asset_pipeline(
+        symbol=symbol,
+        source=source,
+        interval=interval,
+        limit=limit,
+        period=period,
+        save_intermediate=save_intermediate,
+    )
 
 
 def run_agent():
@@ -145,94 +112,25 @@ def run_agent():
 
 def main():
     """
-    Orchestrates the execution of the trading data pipeline for all configured assets.
+    Main entry point for the StockLens trading analysis system.
 
-    This function:
-        - Ensures required directories exist.
-        - Loads the asset configuration from `ASSETS_CONFIG`.
-        - Iterates over each configured asset and runs the `pipeline` function
-          according to its source type (Binance or Yahoo).
-        - Handles errors gracefully, allowing other assets to continue processing
-          even if one fails.
-        - Prints progress, errors, and warnings.
-
-    Returns:
-        None
+    Uses the new OOP architecture with TradingAnalysisPipeline for cleaner,
+    more maintainable code.
     """
-    ensure_dirs()
-
     try:
-        with ASSETS_CONFIG.open(encoding="utf-8") as f:
-            assets = json.load(f)
-    except FileNotFoundError:
-        print(f"Error: No se encontró el archivo de configuración: {ASSETS_CONFIG}")
-        return
-    except json.JSONDecodeError as e:
-        print(f"Error: El archivo de configuración no es un JSON válido: {e}")
-        return
+        # Initialize and run the complete trading analysis pipeline
+        pipeline = TradingAnalysisPipeline(
+            db_path="data/stocklens.db",
+            use_cache=True
+        )
+        pipeline.run_complete_pipeline()
+        print("\n=== Pipeline execution completed successfully ===")
 
-    if not assets:
-        print("Aviso: No hay assets configurados en el archivo de configuración")
-        return
+    except Exception as e:
+        print("\n=== Pipeline execution failed ===")
+        print(f"Error: {e}")
+        raise
 
-    # Track processing statistics
-    total_assets = len(assets)
-    successful = 0
-    failed = 0
-    skipped = 0
-
-    for idx, a in enumerate(assets, 1):
-        try:
-            symbol = a.get("symbol")
-            source = a.get("source")
-
-            if not symbol or not source:
-                print(f"\nAviso [{idx}/{total_assets}]: Asset sin 'symbol' o 'source', saltando: {a}")
-                skipped += 1
-                continue
-
-            interval = a.get("interval", DEFAULT_INTERVAL)
-
-            if source == "binance":
-                limit = int(a.get("limit", DEFAULT_LIMIT))
-                print(f"\n=== [{idx}/{total_assets}] {symbol} ({source}) ===")
-                pipeline(symbol, source, interval, limit=limit, period=None, save_intermediate=True)
-                successful += 1
-
-            elif source == "yahoo":
-                period = a.get("period", DEFAULT_PERIOD)
-                print(f"\n=== [{idx}/{total_assets}] {symbol} ({source}) ===")
-                pipeline(symbol, source, interval, limit=None, period=period, save_intermediate=True)
-                successful += 1
-
-            else:
-                print(f"\nAviso [{idx}/{total_assets}]: source no soportado '{source}' para {symbol}")
-                skipped += 1
-
-        except Exception as e:
-            failed += 1
-            symbol_info = a.get("symbol", "unknown")
-            print(f"\n❌ Error procesando {symbol_info}: {type(e).__name__}: {e}")
-            print(f"   Continuando con el siguiente asset...")
-
-    # Print summary
-    print(f"\n{'='*60}")
-    print(f"RESUMEN DE PROCESAMIENTO:")
-    print(f"  Total: {total_assets} assets")
-    print(f"  ✓ Exitosos: {successful}")
-    print(f"  ✗ Fallidos: {failed}")
-    print(f"  ⊘ Saltados: {skipped}")
-    print(f"{'='*60}\n")
-
-    # Only run agent if at least one asset was successful
-    if successful > 0:
-        try:
-            run_agent()
-        except Exception as e:
-            print(f"\n❌ Error ejecutando agente: {type(e).__name__}: {e}")
-            print("   Los datos procesados están guardados, pero el agente no pudo ejecutarse.")
-    else:
-        print("No se procesó ningún asset exitosamente. Saltando ejecución del agente.")
 
 if __name__ == "__main__":
     main()

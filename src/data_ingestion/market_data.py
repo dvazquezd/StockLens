@@ -1,89 +1,316 @@
+"""Market data ingestion and normalization with OOP architecture."""
+
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional
-import pandas as pd
 
+import pandas as pd
+import yfinance as yf
+
+from src.data_ingestion.binance_client import download_ohlcv
 from src.database.data_cache import DataCache
 
-def _normalize_df_yahoo(df: pd.DataFrame) -> pd.DataFrame:
-    """    
-    Normalizes Yahoo Finance OHLCV data to a consistent column format.
 
-    This function:
-        - Flattens MultiIndex columns if present.
-        - Moves the `Date` or `Datetime` index into a column if necessary.
-        - Drops the `Adj Close` column if both `Close` and `Adj Close` exist.
-        - Renames columns to the standard lowercase OHLCV format:
-          `time`, `open`, `high`, `low`, `close`, `volume`.
-        - Removes duplicate columns if present.
-        - Sorts the dataset by `time` and resets the index.
+class MarketDataNormalizer:
+    """Normalizes market data from different sources to a standard format."""
 
-    Parameters:
-        df (pd.DataFrame): The raw DataFrame returned by Yahoo Finance.
+    @staticmethod
+    def normalize_yahoo_data(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalize Yahoo Finance data to standard OHLCV format.
 
-    Returns:
-        pd.DataFrame: The normalized OHLCV DataFrame containing at least
-        `time` and `close`.
+        Args:
+            df: Raw Yahoo Finance DataFrame
 
-    Raises:
-        ValueError: If essential columns (`time` and `close`) are missing after normalization.
-    """
-    # Aplanar MultiIndex si lo hay
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [c[0] for c in df.columns]
+        Returns:
+            Normalized DataFrame with standard column names
 
-    # Pasar índice Date/Datetime a columna
-    if not ("Date" in df.columns or "Datetime" in df.columns):
-        if isinstance(df.index, pd.DatetimeIndex) or df.index.name in ("Date", "Datetime"):
-            df = df.reset_index()
+        Raises:
+            ValueError: If essential columns are missing after normalization
+        """
+        # Flatten MultiIndex columns if present
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [col[0] for col in df.columns]
 
-    # Si existen ambas columnas de cierre, nos quedamos con Close
-    if "Close" in df.columns and "Adj Close" in df.columns:
-        df = df.drop(columns=["Adj Close"])
+        # Move Date/Datetime index to column if needed
+        if not any(col in df.columns for col in ["Date", "Datetime"]):
+            if isinstance(df.index, pd.DatetimeIndex) or df.index.name in ("Date", "Datetime"):
+                df = df.reset_index()
 
-    # Renombrar a OHLCV estándar
-    rename = {
-        "Date": "time", "Datetime": "time",
-        "Open": "open", "High": "high", "Low": "low",
-        "Close": "close", "Adj Close": "close",
-        "Volume": "volume"
-    }
-    df = df.rename(columns=rename)
+        # Prefer Close over Adj Close
+        if "Close" in df.columns and "Adj Close" in df.columns:
+            df = df.drop(columns=["Adj Close"])
 
-    keep = [c for c in ["time", "open", "high", "low", "close", "volume"] if c in df.columns]
-    if "time" not in keep or "close" not in keep:
-        raise ValueError(f"Yahoo: columnas insuficientes tras normalizar: {df.columns.tolist()}")
+        # Standardize column names
+        column_mapping = {
+            "Date": "time", "Datetime": "time",
+            "Open": "open", "High": "high", "Low": "low",
+            "Close": "close", "Adj Close": "close",
+            "Volume": "volume"
+        }
+        df = df.rename(columns=column_mapping)
 
-    # Eliminar duplicados por si acaso
-    df = df.loc[:, ~df.columns.duplicated()]
+        # Select and validate required columns
+        required_columns = ["time", "open", "high", "low", "close", "volume"]
+        available_columns = [col for col in required_columns if col in df.columns]
 
-    return df[keep].sort_values("time").reset_index(drop=True)
+        if "time" not in available_columns or "close" not in available_columns:
+            raise ValueError(f"Missing essential columns after normalization: {df.columns.tolist()}")
+
+        # Remove duplicate columns and sort
+        df = df.loc[:, ~df.columns.duplicated()]
+        return df[available_columns].sort_values("time").reset_index(drop=True)
+
+    @staticmethod
+    def normalize_binance_data(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Validate and sort Binance data.
+
+        Args:
+            df: Binance OHLCV DataFrame
+
+        Returns:
+            Validated and sorted DataFrame
+
+        Raises:
+            ValueError: If required columns are missing
+        """
+        required_columns = ["time", "open", "high", "low", "close", "volume"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
+
+        return df.sort_values("time").reset_index(drop=True)
 
 
-def _normalize_df_binance(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Validates and sorts Binance OHLCV data.
+class MarketDataDownloader:
+    """Downloads and processes market data from various sources with intelligent caching."""
 
-    This function ensures that the Binance DataFrame contains all required
-    columns (`time`, `open`, `high`, `low`, `close`, `volume`), sorts by `time`,
-    and resets the index.
+    def __init__(self, db_path: str = "data/stocklens.db"):
+        """
+        Initialize the market data downloader.
 
-    Parameters:
-        df (pd.DataFrame): The raw Binance OHLCV DataFrame.
+        Args:
+            db_path: Path to SQLite database for caching
+        """
+        self.db_path = db_path
+        self._normalizer = MarketDataNormalizer()
 
-    Returns:
-        pd.DataFrame: The validated and sorted Binance OHLCV DataFrame.
+    def download_data(
+        self,
+        symbol: str,
+        source: str,
+        interval: str,
+        limit: Optional[int] = None,
+        period: Optional[str] = None,
+        use_cache: bool = True,
+        save_to_disk: bool = True,
+        output_directory: Optional[Path] = None,
+    ) -> pd.DataFrame:
+        """
+        Download market data from specified source with intelligent caching.
 
-    Raises:
-        ValueError: If one or more required OHLCV columns are missing.
-    """
-    # Asumimos que ya viene con columnas time/open/high/low/close/volume
-    need = ["time","open","high","low","close","volume"]
-    missing = [c for c in need if c not in df.columns]
-    if missing:
-        raise ValueError(f"Binance: faltan columnas {missing}")
-    return df.sort_values("time").reset_index(drop=True)
+        Args:
+            symbol: Asset symbol or ticker
+            source: Data source ('binance' or 'yahoo')
+            interval: Time interval
+            limit: Number of data points (Binance only)
+            period: Time period (Yahoo only)
+            use_cache: Whether to use intelligent caching
+            save_to_disk: Whether to save data to disk (parquet files)
+            output_directory: Directory to save data
 
+        Returns:
+            Normalized OHLCV DataFrame
+
+        Raises:
+            ValueError: If required parameters are missing or source is unsupported
+        """
+        if use_cache:
+            return self._download_with_cache(
+                symbol=symbol,
+                source=source,
+                interval=interval,
+                limit=limit,
+                period=period,
+                save_to_disk=save_to_disk,
+                output_directory=output_directory,
+            )
+        else:
+            return self._download_direct(
+                symbol=symbol,
+                source=source,
+                interval=interval,
+                limit=limit,
+                period=period,
+                save_to_disk=save_to_disk,
+                output_directory=output_directory,
+            )
+
+    def _download_with_cache(
+        self,
+        symbol: str,
+        source: str,
+        interval: str,
+        limit: Optional[int] = None,
+        period: Optional[str] = None,
+        save_to_disk: bool = True,
+        output_directory: Optional[Path] = None,
+    ) -> pd.DataFrame:
+        """
+        Download data with intelligent caching (downloads only new data).
+
+        This method:
+        1. Checks if data exists in cache
+        2. Determines if cache is fresh or needs updating
+        3. Downloads only missing/new data
+        4. Merges with cached data
+        5. Saves to database
+        """
+        with DataCache(self.db_path) as cache:
+            if source == "binance":
+                if limit is None:
+                    raise ValueError("Parameter 'limit' is required for Binance data")
+
+                use_cached, download_limit, latest_ts = cache.get_download_params(
+                    symbol=symbol,
+                    source=source,
+                    interval=interval,
+                    requested_limit=limit
+                )
+
+                if download_limit == 0:
+                    # Cache is fresh and sufficient
+                    print(f"✓ {symbol}: Using cached data ({limit} rows, fresh)")
+                    cached_df, _ = cache.get_cached_data(symbol, source, interval, limit)
+
+                    if save_to_disk:
+                        self._save_to_disk(cached_df, symbol, interval, output_directory)
+
+                    return cached_df
+
+                # Download new data
+                cached_df, _ = cache.get_cached_data(symbol, source, interval)
+                cache_size = len(cached_df) if cached_df is not None else 0
+                print(f"📥 {symbol}: Downloading {download_limit} new rows (cache has {cache_size} rows)")
+
+                new_df = download_ohlcv(symbol=symbol, interval=interval, limit=download_limit)
+                new_df = self._normalizer.normalize_binance_data(new_df)
+
+                # Merge with cache
+                merged_df = cache.merge_with_cache(new_df, symbol, source, interval, limit=limit)
+                print(f"✓ {symbol}: {len(new_df)} new rows downloaded, total {len(merged_df)} rows in cache")
+
+                if save_to_disk:
+                    self._save_to_disk(merged_df, symbol, interval, output_directory)
+
+                return merged_df
+
+            elif source == "yahoo":
+                if period is None:
+                    raise ValueError("Parameter 'period' is required for Yahoo data")
+
+                # For Yahoo, we always need to download full period (no incremental support in yfinance)
+                # But we can still cache it
+                cached_df, latest_ts = cache.get_cached_data(symbol, source, interval)
+
+                if cached_df is not None and not cache.needs_update(latest_ts, interval):
+                    print(f"✓ {symbol}: Using cached data ({len(cached_df)} rows, fresh)")
+
+                    if save_to_disk:
+                        self._save_to_disk(cached_df, symbol, interval, output_directory)
+
+                    return cached_df
+
+                # Download from Yahoo
+                print(f"📥 {symbol}: Downloading from Yahoo Finance (period: {period})")
+                new_df = yf.download(symbol, interval=interval, period=period, auto_adjust=False)
+
+                if new_df.empty:
+                    raise ValueError(f"No data returned from Yahoo for symbol: {symbol}")
+
+                new_df = self._normalizer.normalize_yahoo_data(new_df)
+
+                # Save to cache
+                cache.save_to_cache(new_df, symbol, source, interval)
+                print(f"✓ {symbol}: {len(new_df)} rows downloaded and cached")
+
+                if save_to_disk:
+                    self._save_to_disk(new_df, symbol, interval, output_directory)
+
+                return new_df
+
+            else:
+                raise ValueError(f"Unsupported data source: {source}")
+
+    def _download_direct(
+        self,
+        symbol: str,
+        source: str,
+        interval: str,
+        limit: Optional[int] = None,
+        period: Optional[str] = None,
+        save_to_disk: bool = True,
+        output_directory: Optional[Path] = None,
+    ) -> pd.DataFrame:
+        """
+        Download data directly without caching.
+
+        Args:
+            symbol: Asset symbol
+            source: Data source
+            interval: Time interval
+            limit: Number of data points (Binance)
+            period: Time period (Yahoo)
+            save_to_disk: Whether to save to disk
+            output_directory: Directory to save data
+
+        Returns:
+            Normalized OHLCV DataFrame
+        """
+        if source == "binance":
+            if limit is None:
+                raise ValueError("Parameter 'limit' is required for Binance data")
+
+            df = download_ohlcv(symbol=symbol, interval=interval, limit=limit)
+            df = self._normalizer.normalize_binance_data(df)
+
+        elif source == "yahoo":
+            if period is None:
+                raise ValueError("Parameter 'period' is required for Yahoo data")
+
+            df = yf.download(symbol, interval=interval, period=period, auto_adjust=False)
+
+            if df.empty:
+                raise ValueError(f"No data returned from Yahoo for symbol: {symbol}")
+
+            df = self._normalizer.normalize_yahoo_data(df)
+
+        else:
+            raise ValueError(f"Unsupported data source: {source}")
+
+        if save_to_disk:
+            self._save_to_disk(df, symbol, interval, output_directory)
+
+        return df
+
+    def _save_to_disk(
+        self,
+        df: pd.DataFrame,
+        symbol: str,
+        interval: str,
+        output_directory: Optional[Path] = None
+    ) -> None:
+        """Save DataFrame to parquet file."""
+        output_dir = output_directory or Path("data/raw")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_file = output_dir / f"{symbol}_{interval}.parquet"
+        df.to_parquet(output_file, index=False)
+        print(f"Saved {symbol} data to {output_file} ({len(df)} rows)")
+
+
+# Backward compatibility functions
 def download_market_data_cached(
     symbol: str,
     source: str,
@@ -94,14 +321,7 @@ def download_market_data_cached(
     db_path: str = "data/stocklens.db",
 ) -> pd.DataFrame:
     """
-    Downloads market data with intelligent caching (downloads only new data).
-
-    This function:
-    1. Checks if data exists in cache
-    2. Determines if cache is fresh or needs updating
-    3. Downloads only missing/new data
-    4. Merges with cached data
-    5. Saves to database
+    Downloads market data with intelligent caching (backward compatibility wrapper).
 
     Args:
         symbol: Asset symbol (e.g., 'BTCUSDT', 'AAPL')
@@ -115,140 +335,50 @@ def download_market_data_cached(
     Returns:
         DataFrame with OHLCV data (from cache + new download)
     """
-    if not use_cache:
-        # Fall back to standard download
-        return download_market_data(
-            symbol=symbol,
-            source=source,
-            interval=interval,
-            limit=limit,
-            period=period,
-            to_disk=False
-        )
-
-    with DataCache(db_path) as cache:
-        # Check cache and determine download strategy
-        if source == "binance":
-            if limit is None:
-                raise ValueError("Para binance, 'limit' es obligatorio.")
-
-            use_cached, download_limit, latest_ts = cache.get_download_params(
-                symbol=symbol,
-                source=source,
-                interval=interval,
-                requested_limit=limit
-            )
-
-            if download_limit == 0:
-                # Cache is fresh and sufficient
-                print(f"✓ {symbol}: Using cached data ({limit} rows, fresh)")
-                cached_df, _ = cache.get_cached_data(symbol, source, interval, limit)
-                return cached_df
-
-            # Download new data
-            print(f"📥 {symbol}: Downloading {download_limit} new rows (cache has {len(cache.get_cached_data(symbol, source, interval)[0] or [])} rows)")
-            from src.data_ingestion.binance_client import download_ohlcv
-            new_df = download_ohlcv(symbol=symbol, interval=interval, limit=download_limit)
-            new_df = _normalize_df_binance(new_df)
-
-            # Merge with cache
-            merged_df = cache.merge_with_cache(new_df, symbol, source, interval, limit=limit)
-            print(f"✓ {symbol}: {len(new_df)} new rows downloaded, total {len(merged_df)} rows in cache")
-
-            return merged_df
-
-        elif source == "yahoo":
-            if period is None:
-                raise ValueError("Para yahoo, 'period' es obligatorio.")
-
-            # For Yahoo, we always need to download full period (no incremental support in yfinance)
-            # But we can still cache it
-            cached_df, latest_ts = cache.get_cached_data(symbol, source, interval)
-
-            if cached_df is not None and not cache.needs_update(latest_ts, interval):
-                print(f"✓ {symbol}: Using cached data ({len(cached_df)} rows, fresh)")
-                return cached_df
-
-            # Download from Yahoo
-            print(f"📥 {symbol}: Downloading from Yahoo Finance (period: {period})")
-            import yfinance as yf
-            new_df = yf.download(symbol, interval=interval, period=period, auto_adjust=False)
-            if new_df.empty:
-                raise ValueError(f"Yahoo devolvió vacío para {symbol}")
-            new_df = _normalize_df_yahoo(new_df)
-
-            # Save to cache
-            cache.save_to_cache(new_df, symbol, source, interval)
-            print(f"✓ {symbol}: {len(new_df)} rows downloaded and cached")
-
-            return new_df
-
-        else:
-            raise ValueError(f"source no soportado: {source}")
+    downloader = MarketDataDownloader(db_path=db_path)
+    return downloader.download_data(
+        symbol=symbol,
+        source=source,
+        interval=interval,
+        limit=limit,
+        period=period,
+        use_cache=use_cache,
+        save_to_disk=False,
+    )
 
 
 def download_market_data(
     symbol: str,
-    source: str,              # "binance" | "yahoo"
+    source: str,
     interval: str,
-    limit: int | None = None,
-    period: str | None = None,
+    limit: Optional[int] = None,
+    period: Optional[str] = None,
     to_disk: bool = True,
-    raw_dir: Path | None = None,
+    raw_dir: Optional[Path] = None,
 ) -> pd.DataFrame:
     """
-   Downloads market OHLCV data from Binance or Yahoo Finance, normalizes it,
-    and optionally saves it to disk.
+    Downloads market OHLCV data without caching (backward compatibility wrapper).
 
-    For Binance:
-        - Requires `limit` to specify the number of data points.
-        - Data is fetched via `download_ohlcv` and validated with `_normalize_df_binance`.
-
-    For Yahoo:
-        - Requires `period` to specify the time range (e.g., '1y', '6mo').
-        - Data is fetched via `yfinance.download` and normalized with `_normalize_df_yahoo`.
-
-    Parameters:
-        symbol (str): The asset ticker or trading pair (e.g., 'BTCUSDT', 'AAPL').
-        source (str): Data source identifier, either `"binance"` or `"yahoo"`.
-        interval (str): Time interval between data points (e.g., '1h', '1d').
-        limit (int | None): Number of data points to fetch (Binance only).
-        period (str | None): Historical period to fetch (Yahoo only).
-        to_disk (bool, optional): Whether to save the normalized DataFrame to disk. Defaults to True.
-        raw_dir (Path | None, optional): Directory path to save raw data files. Defaults to `"data/raw"`.
+    Args:
+        symbol: The asset ticker or trading pair (e.g., 'BTCUSDT', 'AAPL')
+        source: Data source identifier, either 'binance' or 'yahoo'
+        interval: Time interval between data points (e.g., '1h', '1d')
+        limit: Number of data points to fetch (Binance only)
+        period: Historical period to fetch (Yahoo only)
+        to_disk: Whether to save the normalized DataFrame to disk
+        raw_dir: Directory path to save raw data files
 
     Returns:
-        pd.DataFrame: A normalized OHLCV DataFrame with columns:
-        `time`, `open`, `high`, `low`, `close`, `volume`.
-
-    Raises:
-        ValueError: If required parameters are missing for the chosen source
-            or if the source is unsupported.
+        Normalized OHLCV DataFrame
     """
-    if source == "binance":
-        from src.data_ingestion.binance_client import download_ohlcv  # función que te devuelva df
-        if limit is None:
-            raise ValueError("Para binance, 'limit' es obligatorio.")
-        df = download_ohlcv(symbol=symbol, interval=interval, limit=limit)
-        df = _normalize_df_binance(df)
-
-    elif source == "yahoo":
-        import yfinance as yf
-        if period is None:
-            raise ValueError("Para yahoo, 'period' es obligatorio.")
-        df = yf.download(symbol, interval=interval, period=period, auto_adjust=False)
-        if df.empty:
-            raise ValueError(f"Yahoo devolvió vacío para {symbol}")
-        df = _normalize_df_yahoo(df)
-
-    else:
-        raise ValueError(f"source no soportado: {source}")
-
-    if to_disk:
-        out_dir = raw_dir or Path("data/raw")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out = out_dir / f"{symbol}_{interval}.parquet"
-        df.to_parquet(out, index=False)
-        print(f"{symbol} guardado en {out} ({len(df)} filas)")
-
-    return df
+    downloader = MarketDataDownloader()
+    return downloader.download_data(
+        symbol=symbol,
+        source=source,
+        interval=interval,
+        limit=limit,
+        period=period,
+        use_cache=False,
+        save_to_disk=to_disk,
+        output_directory=raw_dir,
+    )
