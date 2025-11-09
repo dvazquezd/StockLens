@@ -10,8 +10,7 @@ from config.config import (
     AGENT_MODE, ASSETS_CONFIG, DEFAULT_INTERVAL, DEFAULT_LIMIT, DEFAULT_PERIOD,
     LLM_MODEL, LLM_PROVIDER, PROCESSED_PATH, RAW_PATH
 )
-from src.agent.agent_llm import run_agent_llm
-from src.agent.agent_local import run_agent_local
+from src.agent.agents.factory import AgentFactory
 from src.data_ingestion.market_data import MarketDataDownloader
 from src.database.market_db import MarketDatabase
 from src.features.indicators import TechnicalIndicatorCalculator
@@ -106,20 +105,26 @@ class TradingAnalysisPipeline:
 
         return raw_data, indicators_data, signals_data
 
-    def run_analysis_agent(self, mode: Optional[str] = None) -> None:
+    def run_analysis_agent(self, mode: Optional[str] = None, provider: Optional[str] = None, model: Optional[str] = None) -> None:
         """
-        Execute the appropriate analysis agent.
+        Execute the appropriate analysis agent using the new OOP architecture.
 
         Args:
             mode: Agent mode ('local' or 'llm'). If None, uses AGENT_MODE from config
+            provider: LLM provider ('anthropic', 'openai'). If None, uses LLM_PROVIDER from config
+            model: Model identifier. If None, uses LLM_MODEL from config
         """
         mode = mode or AGENT_MODE
 
         if mode == "local":
-            run_agent_local(PROCESSED_PATH)
+            agent = AgentFactory.create_agent("local")
+            agent.analyze_signals(PROCESSED_PATH)
 
         elif mode == "llm":
-            run_agent_llm(PROCESSED_PATH, model=LLM_MODEL, provider=LLM_PROVIDER)
+            provider = provider or LLM_PROVIDER
+            model = model or LLM_MODEL
+            agent = AgentFactory.create_agent(provider, model=model)
+            agent.analyze_signals(PROCESSED_PATH)
 
         else:
             raise ValueError(f"Unknown agent mode: {mode}. Use 'local' or 'llm'.")
