@@ -113,12 +113,20 @@ class MarketDatabase:
                 symbol TEXT NOT NULL,
                 recommendation TEXT NOT NULL CHECK(recommendation IN ('buy', 'sell', 'hold')),
                 rationale TEXT,
+                portfolio_analysis TEXT,
                 confidence_score REAL,
                 price_at_recommendation REAL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (agent_run_id) REFERENCES agent_runs(id)
             )
         """)
+
+        # Add portfolio_analysis column if it doesn't exist (migration)
+        try:
+            cursor.execute("SELECT portfolio_analysis FROM recommendations LIMIT 1")
+        except:
+            cursor.execute("ALTER TABLE recommendations ADD COLUMN portfolio_analysis TEXT")
+            self.conn.commit()
 
         # Create indexes for fast queries
         cursor.execute("""
@@ -405,7 +413,8 @@ class MarketDatabase:
         recommendation: str,
         rationale: str,
         price_at_recommendation: Optional[float] = None,
-        confidence_score: Optional[float] = None
+        confidence_score: Optional[float] = None,
+        portfolio_analysis: Optional[str] = None
     ) -> int:
         """
         Insert agent recommendation.
@@ -417,6 +426,7 @@ class MarketDatabase:
             rationale: Reasoning for recommendation
             price_at_recommendation: Price at time of recommendation
             confidence_score: Confidence score (0-1)
+            portfolio_analysis: Detailed portfolio position analysis (optional)
 
         Returns:
             ID of created recommendation
@@ -424,14 +434,15 @@ class MarketDatabase:
         cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO recommendations
-            (agent_run_id, symbol, recommendation, rationale,
+            (agent_run_id, symbol, recommendation, rationale, portfolio_analysis,
              price_at_recommendation, confidence_score)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             agent_run_id,
             symbol,
             recommendation,
             rationale,
+            portfolio_analysis,
             price_at_recommendation,
             confidence_score
         ))

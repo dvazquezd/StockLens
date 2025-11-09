@@ -146,6 +146,13 @@
                         </div>
                         {% endif %}
 
+                        {% if asset.in_portfolio and asset.portfolio_analysis %}
+                        <div class="portfolio-analysis">
+                            <div class="analysis-title">Portfolio Position Analysis</div>
+                            <div class="analysis-content">{{ asset.portfolio_analysis }}</div>
+                        </div>
+                        {% endif %}
+
                         <div class="asset-indicators">
                             <div class="indicator">
                                 <span class="indicator-label">RSI</span>

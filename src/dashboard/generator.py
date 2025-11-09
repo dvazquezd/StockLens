@@ -374,6 +374,11 @@ class DashboardGenerator:
                     signal['pnl_amount'] = pnl_amount
                     signal['pnl_percent'] = pnl_percent
                     signal['current_price'] = current_price
+
+                    # Get portfolio analysis from LLM
+                    portfolio_analysis = self._get_portfolio_analysis(db, signal['symbol'], target_date)
+                    if portfolio_analysis:
+                        signal['portfolio_analysis'] = portfolio_analysis
         else:
             signal['in_portfolio'] = False
 
@@ -384,7 +389,21 @@ class DashboardGenerator:
         return signal
 
     def _get_rationale(self, db: MarketDatabase, symbol: str, date: str) -> str:
-        """Get analysis rationale for a symbol from recommendations."""
+        """Get analysis rationale for a symbol from LLM recommendations."""
+        # Try to get from LLM JSON file first
+        llm_file = Path("data/processed/agent_summary_llm.json")
+        if llm_file.exists():
+            try:
+                with open(llm_file, 'r') as f:
+                    recommendations = json.load(f)
+
+                # Find recommendation for this symbol
+                for rec in recommendations:
+                    if isinstance(rec, dict) and rec.get('symbol') == symbol:
+                        return rec.get('rationale', '')
+            except (json.JSONDecodeError, FileNotFoundError):
+                pass
+
         # Try to get from recommendations table
         query = """
             SELECT r.rationale
@@ -440,6 +459,38 @@ class DashboardGenerator:
             reasons.append("Strong trend (ADX ≥ 25)")
 
         return "; ".join(reasons)
+
+    def _get_portfolio_analysis(self, db: MarketDatabase, symbol: str, date: str) -> str:
+        """Get portfolio analysis for a symbol from LLM recommendations."""
+        # Try to get from LLM JSON file first
+        llm_file = Path("data/processed/agent_summary_llm.json")
+        if llm_file.exists():
+            try:
+                with open(llm_file, 'r') as f:
+                    recommendations = json.load(f)
+
+                # Find recommendation for this symbol
+                for rec in recommendations:
+                    if isinstance(rec, dict) and rec.get('symbol') == symbol:
+                        return rec.get('portfolio_analysis', '')
+            except (json.JSONDecodeError, FileNotFoundError):
+                pass
+
+        # Try to get from recommendations table
+        query = """
+            SELECT r.portfolio_analysis
+            FROM recommendations r
+            WHERE r.symbol = ? AND DATE(r.created_at) = ?
+            ORDER BY r.created_at DESC
+            LIMIT 1
+        """
+
+        result = db.conn.execute(query, (symbol, date)).fetchone()
+
+        if result and result[0]:
+            return result[0]
+
+        return ""
 
     def _generate_asset_chart(self, db: MarketDatabase, symbol: str, purchase_price: float = None) -> str:
         """Generate Plotly chart data for asset price history."""

@@ -171,6 +171,8 @@ class LLMAgent(TradingAgent):
 
             # Validate each recommendation
             required_fields = {"symbol", "recommendation", "rationale"}
+            optional_fields = {"portfolio_analysis"}  # Optional field for portfolio assets
+
             for idx, item in enumerate(response_json):
                 if not isinstance(item, dict):
                     raise ValueError(f"Item {idx} is not a dict: {type(item).__name__}")
@@ -185,6 +187,12 @@ class LLMAgent(TradingAgent):
                 if rec not in valid_recommendations:
                     print(f"Warning: Invalid recommendation '{rec}' in {item.get('symbol')}. Defaulting to 'hold'.")
                     item["recommendation"] = "hold"
+
+                # Validate that extra fields are only from optional_fields
+                all_valid_fields = required_fields | optional_fields
+                extra_fields = set(item.keys()) - all_valid_fields
+                if extra_fields:
+                    print(f"Warning: Item {idx} has unexpected fields: {extra_fields}. They will be preserved.")
 
             # Save successfully parsed and validated JSON
             output_file = processed_dir / "agent_summary_llm.json"
