@@ -15,7 +15,7 @@
             <nav class="nav">
                 <a href="#overview" class="active">Overview</a>
                 <a href="#portfolio">Portfolio</a>
-                <a href="#watchlist">Seguimiento</a>
+                <a href="#watchlist">Watchlist</a>
                 <a href="#history">Archive</a>
             </nav>
         </div>
@@ -191,7 +191,7 @@
         {% set watchlist_assets = assets | selectattr('in_portfolio', 'equalto', false) | list %}
         {% if watchlist_assets %}
         <section id="watchlist">
-            <h2 class="section-title">Seguimiento — {{ current_date }}</h2>
+            <h2 class="section-title">watchlist — {{ current_date }}</h2>
 
             <div class="assets-grid">
                 {% for asset in watchlist_assets %}
