@@ -104,19 +104,3 @@ class TechnicalIndicatorCalculator:
 
         # Remove rows with NaN values
         return result.dropna().reset_index(drop=True)
-
-
-# Backward compatibility function
-def enrich_with_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Enriches a standardized OHLCV dataset with common technical analysis indicators.
-    (Backward compatibility wrapper)
-
-    Args:
-        df: A DataFrame containing OHLCV data
-
-    Returns:
-        DataFrame with time, close, and calculated indicator columns
-    """
-    calculator = TechnicalIndicatorCalculator()
-    return calculator.calculate_indicators(df)

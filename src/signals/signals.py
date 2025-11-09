@@ -57,19 +57,3 @@ class TradingSignalGenerator:
         )
 
         return df
-
-
-# Backward compatibility function
-def make_recommendations(df_ind: pd.DataFrame) -> pd.DataFrame:
-    """
-    Generates trading recommendations based on technical indicator rules.
-    (Backward compatibility wrapper)
-
-    Args:
-        df_ind: DataFrame containing technical indicators
-
-    Returns:
-        DataFrame including signals, score, and recommendation
-    """
-    generator = TradingSignalGenerator()
-    return generator.generate_signals(df_ind)
