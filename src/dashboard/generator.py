@@ -58,8 +58,27 @@ class DashboardGenerator:
         template_dir = Path(__file__).parent / "templates"
         self.jinja_env = Environment(loader=FileSystemLoader(str(template_dir)))
 
+        # Add custom filters
+        self.jinja_env.filters['js_safe'] = self._js_safe_symbol
+
         # Copy static files
         self._copy_static_files()
+
+    @staticmethod
+    def _js_safe_symbol(symbol: str) -> str:
+        """
+        Convert a symbol to a JavaScript-safe variable name.
+        Replaces dots and other invalid characters with underscores.
+
+        Args:
+            symbol: Stock symbol (e.g., "FB2A.DE")
+
+        Returns:
+            JavaScript-safe name (e.g., "FB2A_DE")
+        """
+        import re
+        # Replace any character that's not alphanumeric or underscore with underscore
+        return re.sub(r'[^a-zA-Z0-9_]', '_', symbol)
 
     def _copy_static_files(self):
         """Copy CSS and JS files to output directory."""

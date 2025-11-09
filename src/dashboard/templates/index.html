@@ -14,7 +14,8 @@
             <div class="logo">StockLens</div>
             <nav class="nav">
                 <a href="#overview" class="active">Overview</a>
-                <a href="#assets">Portfolio</a>
+                <a href="#portfolio">Portfolio</a>
+                <a href="#watchlist">Seguimiento</a>
                 <a href="#history">Archive</a>
             </nav>
         </div>
@@ -170,7 +171,7 @@
 
                         <!-- Asset Chart -->
                         <div class="asset-chart">
-                            <div id="chart-{{ asset.symbol }}"></div>
+                            <div id="chart-{{ asset.symbol | js_safe }}"></div>
                         </div>
                     </div>
                 </div>
@@ -234,7 +235,7 @@
 
                         <!-- Asset Chart -->
                         <div class="asset-chart">
-                            <div id="chart-{{ asset.symbol }}"></div>
+                            <div id="chart-{{ asset.symbol | js_safe }}"></div>
                         </div>
                     </div>
                 </div>
@@ -309,8 +310,8 @@
 
         // Asset Charts
         {% for asset in assets %}
-        var chartData_{{ asset.symbol }} = {{ asset.chart_data | safe }};
-        var chartLayout_{{ asset.symbol }} = {
+        var chartData_{{ asset.symbol | js_safe }} = {{ asset.chart_data | safe }};
+        var chartLayout_{{ asset.symbol | js_safe }} = {
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
             font: {
@@ -341,7 +342,7 @@
             }
         };
 
-        Plotly.newPlot('chart-{{ asset.symbol }}', chartData_{{ asset.symbol }}, chartLayout_{{ asset.symbol }}, {
+        Plotly.newPlot('chart-{{ asset.symbol | js_safe }}', chartData_{{ asset.symbol | js_safe }}, chartLayout_{{ asset.symbol | js_safe }}, {
             responsive: true,
             displayModeBar: false
         });
