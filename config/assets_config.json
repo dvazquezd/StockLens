@@ -1,5 +1,4 @@
 [
-  { "symbol": "META",  "source": "yahoo",   "interval": "1d", "period": "1y" },
-  { "symbol": "NVDA",  "source": "yahoo",   "interval": "1d", "period": "1y" }
-
+  { "symbol": "META",  "source": "yahoo",   "interval": "1d", "period": "1y", "in_portfolio": true },
+  { "symbol": "NVDA",  "source": "yahoo",   "interval": "1d", "period": "1y", "in_portfolio": false }
 ]

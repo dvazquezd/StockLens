@@ -65,9 +65,14 @@
 
             <div class="assets-grid">
                 {% for asset in assets %}
-                <div class="asset-card">
+                <div class="asset-card {% if asset.in_portfolio %}in-portfolio{% endif %}">
                     <div class="asset-header">
-                        <div class="asset-symbol">{{ asset.symbol }}</div>
+                        <div class="asset-symbol">
+                            {{ asset.symbol }}
+                            {% if asset.in_portfolio %}
+                            <span class="portfolio-badge">Portfolio</span>
+                            {% endif %}
+                        </div>
                         <div class="asset-recommendation rec-{{ asset.recommendation }}">
                             {{ asset.recommendation }}
                         </div>
