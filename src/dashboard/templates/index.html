@@ -59,9 +59,11 @@
             </div>
         </section>
 
-        <!-- Current Assets Section -->
-        <section id="assets">
-            <h2 class="section-title">Portfolio Analysis — {{ current_date }}</h2>
+        <!-- Portfolio Section -->
+        {% set portfolio_assets = assets | selectattr('in_portfolio', 'equalto', true) | list %}
+        {% if portfolio_assets %}
+        <section id="portfolio">
+            <h2 class="section-title">Portfolio — {{ current_date }}</h2>
 
             <!-- Portfolio Summary -->
             {% if portfolio_summary.has_portfolio %}
@@ -93,7 +95,7 @@
             {% endif %}
 
             <div class="assets-grid">
-                {% for asset in assets %}
+                {% for asset in portfolio_assets %}
                 <div class="asset-card {% if asset.in_portfolio %}in-portfolio{% endif %}">
                     <div class="asset-header">
                         <div class="asset-symbol">
@@ -175,6 +177,71 @@
                 {% endfor %}
             </div>
         </section>
+        {% endif %}
+
+        <!-- Watchlist Section -->
+        {% set watchlist_assets = assets | selectattr('in_portfolio', 'equalto', false) | list %}
+        {% if watchlist_assets %}
+        <section id="watchlist">
+            <h2 class="section-title">Seguimiento — {{ current_date }}</h2>
+
+            <div class="assets-grid">
+                {% for asset in watchlist_assets %}
+                <div class="asset-card">
+                    <div class="asset-header">
+                        <div class="asset-symbol">
+                            {{ asset.symbol }}
+                        </div>
+                        <div class="asset-recommendation rec-{{ asset.recommendation }}">
+                            {{ asset.recommendation }}
+                        </div>
+                    </div>
+
+                    <div class="asset-body">
+                        <div class="asset-price">{{ asset.close }}</div>
+
+                        <div class="asset-indicators">
+                            <div class="indicator">
+                                <span class="indicator-label">RSI</span>
+                                <span class="indicator-value">{{ asset.rsi_14 }}</span>
+                            </div>
+                            <div class="indicator">
+                                <span class="indicator-label">MACD</span>
+                                <span class="indicator-value">{{ asset.macd }}</span>
+                            </div>
+                            <div class="indicator">
+                                <span class="indicator-label">SMA 50</span>
+                                <span class="indicator-value">{{ asset.sma_50 }}</span>
+                            </div>
+                            <div class="indicator">
+                                <span class="indicator-label">SMA 200</span>
+                                <span class="indicator-value">{{ asset.sma_200 }}</span>
+                            </div>
+                            <div class="indicator">
+                                <span class="indicator-label">Bollinger</span>
+                                <span class="indicator-value">{{ asset.bb_position }}</span>
+                            </div>
+                            <div class="indicator">
+                                <span class="indicator-label">ADX</span>
+                                <span class="indicator-value">{{ asset.adx }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Rationale -->
+                        {% if asset.rationale %}
+                        <div class="asset-rationale">{{ asset.rationale }}</div>
+                        {% endif %}
+
+                        <!-- Asset Chart -->
+                        <div class="asset-chart">
+                            <div id="chart-{{ asset.symbol }}"></div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
 
         <!-- Historical Navigation -->
         <section id="history" class="historical-nav">

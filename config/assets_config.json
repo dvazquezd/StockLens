@@ -18,5 +18,12 @@
     "purchase_date": "2025-10-29",
     "purchase_price": 208.00,
     "shares": 30
+  },
+  {
+    "symbol": "AAPL",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": false
   }
 ]
