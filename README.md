@@ -308,7 +308,7 @@ agent = AgentFactory.create_agent(
   - Mini price charts with **purchase price reference line** (dashed)
   - Standard AI rationale based on technical indicators
 
-### Seguimiento Section (Watchlist)
+### Watchlist Section 
 - Clean asset cards for assets you're monitoring but don't own
 - Standard technical analysis and AI recommendations
 - Same chart and indicator displays without portfolio metrics
