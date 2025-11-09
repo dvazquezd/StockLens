@@ -11,20 +11,48 @@ from jinja2 import Environment, FileSystemLoader
 from src.database.market_db import MarketDatabase
 
 
+def load_assets_config(config_path: Path = None) -> Dict[str, Dict]:
+    """
+    Load assets configuration from JSON file.
+
+    Args:
+        config_path: Path to assets_config.json
+
+    Returns:
+        Dictionary mapping symbol to asset config
+    """
+    if config_path is None:
+        config_path = Path("config/assets_config.json")
+
+    if not config_path.exists():
+        return {}
+
+    with open(config_path, 'r') as f:
+        assets = json.load(f)
+
+    # Convert list to dict keyed by symbol
+    return {asset['symbol']: asset for asset in assets}
+
+
 class DashboardGenerator:
     """Generates HTML dashboard with Zara-inspired minimalist design."""
 
-    def __init__(self, db_path: str = "data/stocklens.db", output_dir: str = "dashboard"):
+    def __init__(self, db_path: str = "data/stocklens.db", output_dir: str = "dashboard", assets_config_path: str = None):
         """
         Initialize dashboard generator.
 
         Args:
             db_path: Path to SQLite database
             output_dir: Directory to save generated HTML files
+            assets_config_path: Path to assets_config.json
         """
         self.db_path = Path(db_path)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Load assets configuration
+        config_path = Path(assets_config_path) if assets_config_path else None
+        self.assets_config = load_assets_config(config_path)
 
         # Setup Jinja2 templates
         template_dir = Path(__file__).parent / "templates"
@@ -265,6 +293,13 @@ class DashboardGenerator:
         # Generate price chart
         chart_data = self._generate_asset_chart(db, signal['symbol'])
         signal['chart_data'] = chart_data
+
+        # Add portfolio status
+        symbol = signal['symbol']
+        if symbol in self.assets_config:
+            signal['in_portfolio'] = self.assets_config[symbol].get('in_portfolio', False)
+        else:
+            signal['in_portfolio'] = False
 
         return signal
 
