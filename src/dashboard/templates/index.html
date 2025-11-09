@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockLens - Market Analysis Dashboard</title>
+    <link rel="stylesheet" href="../static/css/zara-style.css">
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="header-content">
+            <div class="logo">StockLens</div>
+            <nav class="nav">
+                <a href="#overview" class="active">Overview</a>
+                <a href="#assets">Assets</a>
+                <a href="#history">History</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Overview Section -->
+        <section id="overview">
+            <h2 class="section-title">Market Overview - Last 30 Days</h2>
+
+            <div class="overview-grid">
+                <div class="overview-card">
+                    <div class="card-label">Total Assets</div>
+                    <div class="card-value">{{ total_assets }}</div>
+                    <div class="card-subtitle">Active monitoring</div>
+                </div>
+
+                <div class="overview-card">
+                    <div class="card-label">Buy Signals</div>
+                    <div class="card-value">{{ buy_count }}</div>
+                    <div class="card-subtitle">Last 30 days</div>
+                </div>
+
+                <div class="overview-card">
+                    <div class="card-label">Sell Signals</div>
+                    <div class="card-value">{{ sell_count }}</div>
+                    <div class="card-subtitle">Last 30 days</div>
+                </div>
+
+                <div class="overview-card">
+                    <div class="card-label">Hold Positions</div>
+                    <div class="card-value">{{ hold_count }}</div>
+                    <div class="card-subtitle">Current status</div>
+                </div>
+            </div>
+
+            <!-- 30-Day Trend Chart -->
+            <div class="chart-container">
+                <h3 class="chart-title">Recommendation Trends - 30 Days</h3>
+                <div id="trend-chart"></div>
+            </div>
+        </section>
+
+        <!-- Current Assets Section -->
+        <section id="assets">
+            <h2 class="section-title">Current Analysis - {{ current_date }}</h2>
+
+            <div class="assets-grid">
+                {% for asset in assets %}
+                <div class="asset-card">
+                    <div class="asset-header">
+                        <div class="asset-symbol">{{ asset.symbol }}</div>
+                        <div class="asset-recommendation rec-{{ asset.recommendation }}">
+                            {{ asset.recommendation }}
+                        </div>
+                    </div>
+
+                    <div class="asset-body">
+                        <div class="asset-price">${{ asset.close }}</div>
+
+                        <div class="asset-indicators">
+                            <div class="indicator">
+                                <span class="indicator-label">RSI</span>
+                                <span class="indicator-value">{{ asset.rsi_14 }}</span>
+                            </div>
+                            <div class="indicator">
+                                <span class="indicator-label">MACD</span>
+                                <span class="indicator-value">{{ asset.macd }}</span>
+                            </div>
+                            <div class="indicator">
+                                <span class="indicator-label">ADX</span>
+                                <span class="indicator-value">{{ asset.adx }}</span>
+                            </div>
+                            <div class="indicator">
+                                <span class="indicator-label">Signal Score</span>
+                                <span class="indicator-value">{{ asset.score }}</span>
+                            </div>
+                        </div>
+
+                        <div class="asset-rationale">
+                            {{ asset.rationale }}
+                        </div>
+
+                        <!-- Asset Chart -->
+                        <div class="chart-container" style="margin-top: 25px; padding: 20px; background: #FAFAFA;">
+                            <div id="chart-{{ asset.symbol }}"></div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- Historical Navigation -->
+        <section id="history" class="historical-nav">
+            <h2 class="section-title">Historical Analysis</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                Access previous analysis and recommendations
+            </p>
+
+            <div class="date-grid">
+                {% for date in historical_dates %}
+                <a href="analysis_{{ date }}.html" class="date-link {% if date == current_date %}current{% endif %}">
+                    {{ date }}
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <p>STOCKLENS © 2024 - MARKET ANALYSIS DASHBOARD</p>
+            <p style="margin-top: 10px;">GENERATED: {{ generation_time }}</p>
+        </div>
+    </footer>
+
+    <!-- Plotly Charts Scripts -->
+    <script>
+        // Trend Chart Data
+        var trendData = {{ trend_data | safe }};
+        var trendLayout = {
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'var(--font-main)', size: 12, color: '#6B6B6B' },
+            xaxis: {
+                showgrid: false,
+                showline: true,
+                linecolor: '#E5E5E5'
+            },
+            yaxis: {
+                showgrid: true,
+                gridcolor: '#F0F0F0',
+                showline: true,
+                linecolor: '#E5E5E5'
+            },
+            margin: { l: 50, r: 20, t: 20, b: 50 },
+            hovermode: 'x unified'
+        };
+        Plotly.newPlot('trend-chart', trendData, trendLayout, {responsive: true, displayModeBar: false});
+
+        // Asset Charts
+        {% for asset in assets %}
+        var chartData_{{ asset.symbol }} = {{ asset.chart_data | safe }};
+        var chartLayout_{{ asset.symbol }} = {
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'var(--font-main)', size: 10, color: '#6B6B6B' },
+            xaxis: {
+                showgrid: false,
+                showticklabels: false
+            },
+            yaxis: {
+                showgrid: true,
+                gridcolor: '#E5E5E5',
+                side: 'right'
+            },
+            margin: { l: 0, r: 50, t: 10, b: 10 },
+            height: 180
+        };
+        Plotly.newPlot('chart-{{ asset.symbol }}', chartData_{{ asset.symbol }}, chartLayout_{{ asset.symbol }},
+            {responsive: true, displayModeBar: false});
+        {% endfor %}
+    </script>
+</body>
+</html>
