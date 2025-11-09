@@ -1,6 +1,9 @@
 from __future__ import annotations
 from pathlib import Path
+from typing import Optional
 import pandas as pd
+
+from src.database.data_cache import DataCache
 
 def _normalize_df_yahoo(df: pd.DataFrame) -> pd.DataFrame:
     """    
@@ -80,6 +83,109 @@ def _normalize_df_binance(df: pd.DataFrame) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Binance: faltan columnas {missing}")
     return df.sort_values("time").reset_index(drop=True)
+
+def download_market_data_cached(
+    symbol: str,
+    source: str,
+    interval: str,
+    limit: Optional[int] = None,
+    period: Optional[str] = None,
+    use_cache: bool = True,
+    db_path: str = "data/stocklens.db",
+) -> pd.DataFrame:
+    """
+    Downloads market data with intelligent caching (downloads only new data).
+
+    This function:
+    1. Checks if data exists in cache
+    2. Determines if cache is fresh or needs updating
+    3. Downloads only missing/new data
+    4. Merges with cached data
+    5. Saves to database
+
+    Args:
+        symbol: Asset symbol (e.g., 'BTCUSDT', 'AAPL')
+        source: Data source ('binance', 'yahoo')
+        interval: Time interval ('1h', '1d', etc.)
+        limit: Total number of rows desired (Binance)
+        period: Historical period (Yahoo, e.g., '1y', '6mo')
+        use_cache: Whether to use caching (default: True)
+        db_path: Path to SQLite database
+
+    Returns:
+        DataFrame with OHLCV data (from cache + new download)
+    """
+    if not use_cache:
+        # Fall back to standard download
+        return download_market_data(
+            symbol=symbol,
+            source=source,
+            interval=interval,
+            limit=limit,
+            period=period,
+            to_disk=False
+        )
+
+    with DataCache(db_path) as cache:
+        # Check cache and determine download strategy
+        if source == "binance":
+            if limit is None:
+                raise ValueError("Para binance, 'limit' es obligatorio.")
+
+            use_cached, download_limit, latest_ts = cache.get_download_params(
+                symbol=symbol,
+                source=source,
+                interval=interval,
+                requested_limit=limit
+            )
+
+            if download_limit == 0:
+                # Cache is fresh and sufficient
+                print(f"✓ {symbol}: Using cached data ({limit} rows, fresh)")
+                cached_df, _ = cache.get_cached_data(symbol, source, interval, limit)
+                return cached_df
+
+            # Download new data
+            print(f"📥 {symbol}: Downloading {download_limit} new rows (cache has {len(cache.get_cached_data(symbol, source, interval)[0] or [])} rows)")
+            from src.data_ingestion.binance_client import download_ohlcv
+            new_df = download_ohlcv(symbol=symbol, interval=interval, limit=download_limit)
+            new_df = _normalize_df_binance(new_df)
+
+            # Merge with cache
+            merged_df = cache.merge_with_cache(new_df, symbol, source, interval, limit=limit)
+            print(f"✓ {symbol}: {len(new_df)} new rows downloaded, total {len(merged_df)} rows in cache")
+
+            return merged_df
+
+        elif source == "yahoo":
+            if period is None:
+                raise ValueError("Para yahoo, 'period' es obligatorio.")
+
+            # For Yahoo, we always need to download full period (no incremental support in yfinance)
+            # But we can still cache it
+            cached_df, latest_ts = cache.get_cached_data(symbol, source, interval)
+
+            if cached_df is not None and not cache.needs_update(latest_ts, interval):
+                print(f"✓ {symbol}: Using cached data ({len(cached_df)} rows, fresh)")
+                return cached_df
+
+            # Download from Yahoo
+            print(f"📥 {symbol}: Downloading from Yahoo Finance (period: {period})")
+            import yfinance as yf
+            new_df = yf.download(symbol, interval=interval, period=period, auto_adjust=False)
+            if new_df.empty:
+                raise ValueError(f"Yahoo devolvió vacío para {symbol}")
+            new_df = _normalize_df_yahoo(new_df)
+
+            # Save to cache
+            cache.save_to_cache(new_df, symbol, source, interval)
+            print(f"✓ {symbol}: {len(new_df)} rows downloaded and cached")
+
+            return new_df
+
+        else:
+            raise ValueError(f"source no soportado: {source}")
+
 
 def download_market_data(
     symbol: str,

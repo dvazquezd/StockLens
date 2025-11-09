@@ -16,9 +16,10 @@ from config.config import (
     LLM_PROVIDER
 )
 
-from src.data_ingestion.market_data import download_market_data
+from src.data_ingestion.market_data import download_market_data, download_market_data_cached
 from src.features.indicators import enrich_with_indicators
-from src.signals.signals import make_recommendations  # renombra tu módulo si aún es run_signals_example
+from src.signals.signals import make_recommendations
+from src.database.market_db import MarketDatabase
 
 
 def ensure_dirs():
@@ -41,17 +42,19 @@ def pipeline(
     limit: Optional[int] = None,
     period: Optional[str] = None,
     save_intermediate: bool = True,
+    use_cache: bool = True,
+    db_path: str = "data/stocklens.db",
 ):
     """
     Executes the end-to-end data ingestion, feature engineering, and signal
     generation pipeline for a given asset.
 
     Steps:
-        1. Downloads raw market data for the specified asset from the given source.
+        1. Downloads raw market data (with intelligent caching).
         2. Enriches the dataset with calculated technical indicators.
-        3. Optionally saves intermediate datasets (raw and enriched).
-        4. Generates trading signals based on enriched data.
-        5. Saves the final signals dataset.
+        3. Generates trading signals based on enriched data.
+        4. Saves all data to SQLite database for historical tracking.
+        5. Optionally saves intermediate datasets to parquet files.
 
     Parameters:
         symbol (str): The ticker or symbol of the asset (e.g., 'BTCUSDT', 'AAPL').
@@ -59,8 +62,9 @@ def pipeline(
         interval (str): The time interval for the market data (e.g., '1h', '1d').
         limit (Optional[int]): Number of data points to retrieve (used by Binance).
         period (Optional[str]): Time period for the data (used by Yahoo Finance).
-        save_intermediate (bool, optional): Whether to save raw and enriched datasets
-            to disk. Defaults to True.
+        save_intermediate (bool, optional): Whether to save datasets to parquet. Defaults to True.
+        use_cache (bool, optional): Whether to use intelligent caching. Defaults to True.
+        db_path (str, optional): Path to SQLite database. Defaults to "data/stocklens.db".
 
     Returns:
         tuple: A tuple containing:
@@ -68,29 +72,50 @@ def pipeline(
             - DataFrame: The enriched market data with indicators.
             - DataFrame: The generated trading signals.
     """
-    df_raw = download_market_data(
-        symbol=symbol,
-        source=source,
-        interval=interval,
-        limit=limit,
-        period=period,
-        to_disk=save_intermediate,   
-        raw_dir=RAW_PATH,             
-    )
+    # Download data with caching
+    if use_cache:
+        df_raw = download_market_data_cached(
+            symbol=symbol,
+            source=source,
+            interval=interval,
+            limit=limit,
+            period=period,
+            use_cache=True,
+            db_path=db_path,
+        )
+    else:
+        df_raw = download_market_data(
+            symbol=symbol,
+            source=source,
+            interval=interval,
+            limit=limit,
+            period=period,
+            to_disk=save_intermediate,
+            raw_dir=RAW_PATH,
+        )
 
+    # Calculate indicators
     df_ind = enrich_with_indicators(df_raw)
 
+    # Generate signals
+    df_sig = make_recommendations(df_ind)
+
+    # Save to database
+    if use_cache:
+        with MarketDatabase(db_path) as db:
+            # Indicators already have 'time' column from df_raw
+            indicators_saved = db.insert_indicators(df_ind, symbol, source, interval)
+            signals_saved = db.insert_signals(df_sig, symbol, source, interval)
+            print(f"💾 {symbol}: Saved {indicators_saved} indicators, {signals_saved} signals to database")
+
+    # Optionally save to parquet files
     if save_intermediate:
         out_ind = PROCESSED_PATH / f"{symbol}_{interval}_ind.parquet"
         df_ind.to_parquet(out_ind, index=False)
-        #print(f"{symbol} descargado y enriquecido {out_ind}")
 
-    df_sig = make_recommendations(df_ind)
-
-    out_sig = PROCESSED_PATH / f"{symbol}_{interval}_signals.parquet"
-    df_sig.to_parquet(out_sig, index=False)
-    print(f"{symbol} con señales guardado en {out_sig}")
-    #print(df_sig.tail(5).to_string(index=False))
+        out_sig = PROCESSED_PATH / f"{symbol}_{interval}_signals.parquet"
+        df_sig.to_parquet(out_sig, index=False)
+        print(f"📄 {symbol}: Saved parquet files")
 
     return df_raw, df_ind, df_sig
 
