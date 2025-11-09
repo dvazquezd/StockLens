@@ -81,10 +81,12 @@ Configure your assets in `config/assets_config.json`:
 
 ```json
 [
-  { "symbol": "META",  "source": "yahoo", "interval": "1d", "period": "1y" },
-  { "symbol": "NVDA",  "source": "yahoo", "interval": "1d", "period": "1y" }
+  { "symbol": "META",  "source": "yahoo", "interval": "1d", "period": "1y", "in_portfolio": true },
+  { "symbol": "NVDA",  "source": "yahoo", "interval": "1d", "period": "1y", "in_portfolio": false }
 ]
 ```
+
+**Portfolio Tracking**: Set `in_portfolio: true` for assets you own, and `false` for watchlist assets. Portfolio assets are visually highlighted in the dashboard.
 
 ### Run Analysis
 
@@ -106,6 +108,24 @@ Open `dashboard/index.html` in your browser to view:
 - **Market overview**: KPIs and 30-day trends
 - **Portfolio analysis**: Detailed insights per asset
 - **Historical archive**: Browse past recommendations
+
+### Reset Database
+
+Clear all data and start fresh:
+
+```bash
+# Reset everything (database + data + dashboard)
+python utils/reset_database.py --all --yes
+
+# Reset only specific components
+python utils/reset_database.py --database  # SQLite database only
+python utils/reset_database.py --raw       # Raw data files only
+python utils/reset_database.py --processed # Processed data only
+python utils/reset_database.py --dashboard # Dashboard HTML files only
+
+# Interactive mode (with confirmation)
+python utils/reset_database.py --all
+```
 
 ---
 
@@ -146,6 +166,10 @@ StockLens/
 │   │
 │   └── pipeline/
 │       └── trading_pipeline.py   # Orchestration pipeline
+│
+├── utils/
+│   ├── reset_database.py         # Database reset utility
+│   └── __init__.py
 │
 ├── data/                         # Generated data (gitignored)
 │   ├── raw/                      # Raw OHLCV parquet files
@@ -240,6 +264,8 @@ agent = AgentFactory.create_agent(
 
 ### Portfolio Analysis
 - Asset-specific cards with recommendations
+- **Portfolio tracking**: Visual badges for owned assets vs watchlist
+- **Enhanced borders**: Portfolio assets highlighted with thicker borders
 - Technical indicator displays
 - Mini price charts (30-day history)
 - AI-generated rationale
@@ -321,6 +347,8 @@ See `requirements.txt` for complete list.
 - [x] Multi-LLM agent architecture
 - [x] Professional HTML dashboard
 - [x] Historical analysis archive
+- [x] Database reset utility
+- [x] Portfolio vs watchlist tracking
 
 ### In Progress 🚧
 - [ ] Real-time WebSocket feeds

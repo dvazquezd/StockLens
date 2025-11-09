@@ -205,6 +205,25 @@ section {
     font-weight: 300;
     letter-spacing: 0.5px;
     color: var(--text-black);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.portfolio-badge {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 600;
+    padding: 4px 10px;
+    background: var(--text-black);
+    color: var(--bg-white);
+    border-radius: 2px;
+}
+
+.asset-card.in-portfolio {
+    border-color: var(--text-black);
+    border-width: 2px;
 }
 
 .asset-recommendation {
