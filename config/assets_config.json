@@ -3,5 +3,8 @@
   { "symbol": "ETHUSDT", "source": "binance", "interval": "1d", "limit": 1000 },
 
   { "symbol": "CSPX.L",  "source": "yahoo",   "interval": "1d", "period": "1y" },
-  { "symbol": "IITU.L",  "source": "yahoo",   "interval": "1d", "period": "1y" }
+  { "symbol": "IITU.L",  "source": "yahoo",   "interval": "1d", "period": "1y" },
+  { "symbol": "META",  "source": "yahoo",   "interval": "1d", "period": "1y" },
+  { "symbol": "NVDA",  "source": "yahoo",   "interval": "1d", "period": "1y" }
+
 ]
