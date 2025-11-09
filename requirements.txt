@@ -6,7 +6,7 @@ tenacity>=8.3
 pytest>=8.2
 yfinance>=0.2.40
 python-binance>=1.0.19
-pandas-ta>=0.3.14b
+# pandas-ta>=0.3.14  # Not available via PyPI, install manually if needed
 setuptools>=70,<81
 wheel
 numpy<2.0

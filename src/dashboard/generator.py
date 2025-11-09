@@ -74,9 +74,10 @@ class DashboardGenerator:
     def _get_available_dates(self, db: MarketDatabase, days_back: int) -> List[str]:
         """Get list of dates with available data."""
         query = """
-            SELECT DISTINCT DATE(timestamp) as date
-            FROM signals
-            WHERE timestamp >= date('now', ?)
+            SELECT DISTINCT DATE(m.timestamp) as date
+            FROM signals s
+            JOIN market_data m ON s.market_data_id = m.id
+            WHERE m.timestamp >= date('now', ?)
             ORDER BY date DESC
         """
 
@@ -132,18 +133,20 @@ class DashboardGenerator:
         """Get all signals for a specific date."""
         query = """
             SELECT
-                symbol,
-                time,
-                close,
-                rsi_14,
-                macd,
-                macd_signal,
-                adx,
-                score,
-                recommendation
-            FROM signals
-            WHERE DATE(timestamp) = ?
-            ORDER BY symbol
+                m.symbol,
+                m.timestamp,
+                m.close,
+                i.rsi_14,
+                i.macd,
+                i.macd_signal,
+                i.adx,
+                s.score,
+                s.recommendation
+            FROM signals s
+            JOIN market_data m ON s.market_data_id = m.id
+            LEFT JOIN indicators i ON s.market_data_id = i.market_data_id
+            WHERE DATE(m.timestamp) = ?
+            ORDER BY m.symbol
         """
 
         results = db.conn.execute(query, (target_date,)).fetchall()
@@ -171,8 +174,10 @@ class DashboardGenerator:
 
         # Get latest signals for each symbol
         query = """
-            SELECT DISTINCT symbol FROM signals
-            WHERE DATE(timestamp) = ?
+            SELECT DISTINCT m.symbol
+            FROM signals s
+            JOIN market_data m ON s.market_data_id = m.id
+            WHERE DATE(m.timestamp) = ?
         """
 
         latest_date = dates[0]
@@ -181,10 +186,11 @@ class DashboardGenerator:
 
         # Count recommendations in last 30 days
         rec_query = """
-            SELECT recommendation, COUNT(*) as count
-            FROM signals
-            WHERE DATE(timestamp) >= date('now', '-30 days')
-            GROUP BY recommendation
+            SELECT s.recommendation, COUNT(*) as count
+            FROM signals s
+            JOIN market_data m ON s.market_data_id = m.id
+            WHERE DATE(m.timestamp) >= date('now', '-30 days')
+            GROUP BY s.recommendation
         """
 
         rec_counts = db.conn.execute(rec_query).fetchall()
@@ -205,12 +211,13 @@ class DashboardGenerator:
         # Get recommendation counts by date
         query = """
             SELECT
-                DATE(timestamp) as date,
-                recommendation,
+                DATE(m.timestamp) as date,
+                s.recommendation,
                 COUNT(*) as count
-            FROM signals
-            WHERE DATE(timestamp) >= date('now', '-30 days')
-            GROUP BY date, recommendation
+            FROM signals s
+            JOIN market_data m ON s.market_data_id = m.id
+            WHERE DATE(m.timestamp) >= date('now', '-30 days')
+            GROUP BY date, s.recommendation
             ORDER BY date
         """
 
@@ -262,13 +269,13 @@ class DashboardGenerator:
         return signal
 
     def _get_rationale(self, db: MarketDatabase, symbol: str, date: str) -> str:
-        """Get analysis rationale for a symbol from agent_runs."""
-        # Try to get from agent_runs table
+        """Get analysis rationale for a symbol from recommendations."""
+        # Try to get from recommendations table
         query = """
-            SELECT rationale
-            FROM agent_runs
-            WHERE symbol = ? AND DATE(run_date) = ?
-            ORDER BY run_date DESC
+            SELECT r.rationale
+            FROM recommendations r
+            WHERE r.symbol = ? AND DATE(r.created_at) = ?
+            ORDER BY r.created_at DESC
             LIMIT 1
         """
 
@@ -279,9 +286,11 @@ class DashboardGenerator:
 
         # Default rationale based on indicators
         signal_query = """
-            SELECT rsi_14, macd, macd_signal, adx, recommendation
-            FROM signals
-            WHERE symbol = ? AND DATE(timestamp) = ?
+            SELECT i.rsi_14, i.macd, i.macd_signal, i.adx, s.recommendation
+            FROM signals s
+            JOIN market_data m ON s.market_data_id = m.id
+            LEFT JOIN indicators i ON s.market_data_id = i.market_data_id
+            WHERE m.symbol = ? AND DATE(m.timestamp) = ?
             LIMIT 1
         """
 
@@ -321,10 +330,10 @@ class DashboardGenerator:
         """Generate Plotly chart data for asset price history."""
         # Get last 30 days of price data
         query = """
-            SELECT time, close
+            SELECT timestamp, close
             FROM market_data
             WHERE symbol = ?
-            ORDER BY time DESC
+            ORDER BY timestamp DESC
             LIMIT 30
         """
 

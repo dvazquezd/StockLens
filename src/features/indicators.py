@@ -5,15 +5,7 @@ import warnings
 from typing import Optional
 
 import pandas as pd
-import pandas_ta as ta
-
-# Suppress pandas_ta warnings
-warnings.filterwarnings(
-    "ignore",
-    message=r"pkg_resources is deprecated as an API.*",
-    category=UserWarning,
-    module=r"pandas_ta(\.__init__)?"
-)
+import ta
 
 
 class TechnicalIndicatorCalculator:
@@ -88,19 +80,29 @@ class TechnicalIndicatorCalculator:
         # Start with time and close columns
         result = df[["time", "close"]].copy()
 
-        # Calculate indicators
-        result["rsi_14"] = ta.rsi(df["close"], length=14)
+        # Calculate indicators using ta library
+        # RSI
+        result["rsi_14"] = ta.momentum.RSIIndicator(close=df["close"], window=14).rsi()
 
-        # MACD calculation
-        macd_data = ta.macd(df["close"], fast=12, slow=26, signal=9)
-        if macd_data is not None:
-            result["macd"] = macd_data["MACD_12_26_9"]
-            result["macd_signal"] = macd_data["MACDs_12_26_9"]
+        # MACD
+        macd = ta.trend.MACD(close=df["close"], window_slow=26, window_fast=12, window_sign=9)
+        result["macd"] = macd.macd()
+        result["macd_signal"] = macd.macd_signal()
 
-        # Additional indicators
-        result["atr_14"] = ta.atr(df["high"], df["low"], df["close"], length=14)
-        result["adx"] = ta.adx(df["high"], df["low"], df["close"], length=14)["ADX_14"]
-        result["obv"] = ta.obv(df["close"], df["volume"])
+        # ATR
+        result["atr_14"] = ta.volatility.AverageTrueRange(
+            high=df["high"], low=df["low"], close=df["close"], window=14
+        ).average_true_range()
+
+        # ADX
+        result["adx"] = ta.trend.ADXIndicator(
+            high=df["high"], low=df["low"], close=df["close"], window=14
+        ).adx()
+
+        # OBV
+        result["obv"] = ta.volume.OnBalanceVolumeIndicator(
+            close=df["close"], volume=df["volume"]
+        ).on_balance_volume()
 
         # Remove rows with NaN values
         return result.dropna().reset_index(drop=True)
