@@ -1,99 +1,122 @@
+"""Technical indicator calculation and data enrichment with OOP architecture."""
+
 from __future__ import annotations
-import pandas as pd
 import warnings
+from typing import Optional
+
+import pandas as pd
+import pandas_ta as ta
+
+# Suppress pandas_ta warnings
 warnings.filterwarnings(
     "ignore",
     message=r"pkg_resources is deprecated as an API.*",
     category=UserWarning,
     module=r"pandas_ta(\.__init__)?"
 )
-import pandas_ta as ta
 
 
-def _standardize_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
-    """    Standardizes an OHLCV (Open, High, Low, Close, Volume) dataset to a consistent
-    column format for downstream processing.
+class TechnicalIndicatorCalculator:
+    """Calculates technical indicators for market data."""
 
-    This function:
-        - Flattens MultiIndex columns if present.
-        - Ensures the presence of a `time` column, converting from index or renaming
-          existing date columns as needed.
-        - Renames common OHLCV column variations to a standard lowercase format.
-        - Validates that essential columns (`time` and `close`) are present.
-        - Sorts by time and resets the index.
+    @staticmethod
+    def standardize_ohlcv_columns(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Standardize OHLCV DataFrame column names and format.
 
-    Parameters:
-        df (pd.DataFrame): The input DataFrame containing OHLCV market data,
-            possibly with varying column names or formats.
+        Args:
+            df: DataFrame with OHLCV data
 
-    Returns:
-        pd.DataFrame: A cleaned and standardized OHLCV DataFrame with columns:
-        `time`, `open`, `high`, `low`, `close`, `volume` (where available).
+        Returns:
+            Standardized DataFrame
 
-    Raises:
-        ValueError: If the required columns (`time` and `close`) are missing after normalization.
-    """
-    df = df.copy()
+        Raises:
+            ValueError: If essential columns are missing after standardization
+        """
+        df = df.copy()
 
-    # Aplanar si viniera con MultiIndex por accidente
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [c[0] for c in df.columns]
+        # Flatten MultiIndex columns if present
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [col[0] for col in df.columns]
 
-    # Si 'time' no está, usar índice si es fecha
-    if "time" not in df.columns:
-        if isinstance(df.index, pd.DatetimeIndex) or df.index.name in ("Date","Datetime"):
-            df = df.reset_index()
-        for cand in ("time","Date","Datetime","date"):
-            if cand in df.columns:
-                if cand != "time":
-                    df = df.rename(columns={cand:"time"})
-                break
+        # Handle time column
+        if "time" not in df.columns:
+            if isinstance(df.index, pd.DatetimeIndex) or df.index.name in ("Date", "Datetime"):
+                df = df.reset_index()
 
-    rename = {"Open":"open","High":"high","Low":"low","Close":"close","Adj Close":"close","Volume":"volume"}
-    df = df.rename(columns=rename)
+            for candidate in ("time", "Date", "Datetime", "date"):
+                if candidate in df.columns and candidate != "time":
+                    df = df.rename(columns={candidate: "time"})
+                    break
 
-    need = ["time","open","high","low","close","volume"]
-    have = [c for c in need if c in df.columns]
-    if "time" not in have or "close" not in have:
-        raise ValueError(f"Faltan columnas esenciales tras normalizar: {df.columns.tolist()}")
+        # Standardize column names
+        column_mapping = {
+            "Open": "open", "High": "high", "Low": "low",
+            "Close": "close", "Adj Close": "close", "Volume": "volume"
+        }
+        df = df.rename(columns=column_mapping)
 
-    df = df[have].sort_values("time").reset_index(drop=True)
-    return df
+        # Validate essential columns
+        required_columns = ["time", "open", "high", "low", "close", "volume"]
+        available_columns = [col for col in required_columns if col in df.columns]
 
+        if "time" not in available_columns or "close" not in available_columns:
+            raise ValueError(f"Missing essential columns after standardization: {df.columns.tolist()}")
+
+        return df[available_columns].sort_values("time").reset_index(drop=True)
+
+    def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate technical indicators for OHLCV data.
+
+        The following indicators are calculated:
+            - rsi_14: 14-period Relative Strength Index
+            - macd: MACD line (12, 26, 9)
+            - macd_signal: MACD signal line (12, 26, 9)
+            - atr_14: 14-period Average True Range
+            - adx: 14-period Average Directional Index
+            - obv: On-Balance Volume
+
+        Args:
+            df: Standardized OHLCV DataFrame
+
+        Returns:
+            DataFrame with calculated indicators (NaN rows removed)
+        """
+        df = self.standardize_ohlcv_columns(df)
+
+        # Start with time and close columns
+        result = df[["time", "close"]].copy()
+
+        # Calculate indicators
+        result["rsi_14"] = ta.rsi(df["close"], length=14)
+
+        # MACD calculation
+        macd_data = ta.macd(df["close"], fast=12, slow=26, signal=9)
+        if macd_data is not None:
+            result["macd"] = macd_data["MACD_12_26_9"]
+            result["macd_signal"] = macd_data["MACDs_12_26_9"]
+
+        # Additional indicators
+        result["atr_14"] = ta.atr(df["high"], df["low"], df["close"], length=14)
+        result["adx"] = ta.adx(df["high"], df["low"], df["close"], length=14)["ADX_14"]
+        result["obv"] = ta.obv(df["close"], df["volume"])
+
+        # Remove rows with NaN values
+        return result.dropna().reset_index(drop=True)
+
+
+# Backward compatibility function
 def enrich_with_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
     Enriches a standardized OHLCV dataset with common technical analysis indicators.
+    (Backward compatibility wrapper)
 
-    The following indicators are calculated:
-        - `rsi_14`: 14-period Relative Strength Index (RSI)
-        - `macd`: MACD line (12, 26, 9)
-        - `macd_signal`: MACD signal line (12, 26, 9)
-        - `atr_14`: 14-period Average True Range (ATR)
-        - `adx`: 14-period Average Directional Index (ADX)
-        - `obv`: On-Balance Volume (OBV)
-
-    The input DataFrame is first standardized using `_standardize_ohlcv` to ensure
-    consistent column names and formats.
-
-    Parameters:
-        df (pd.DataFrame): A DataFrame containing OHLCV data with at least `time`
-            and `close` columns (and ideally `open`, `high`, `low`, `volume`).
+    Args:
+        df: A DataFrame containing OHLCV data
 
     Returns:
-        pd.DataFrame: A DataFrame with `time`, `close`, and the calculated indicator columns.
-            Rows containing NaN values from initial indicator lookback periods are removed.
+        DataFrame with time, close, and calculated indicator columns
     """
-    df = _standardize_ohlcv(df)
-
-    out = df[["time","close"]].copy()
-    # Indicadores básicos (ajusta a tus funciones actuales)
-    out["rsi_14"] = ta.rsi(df["close"], length=14)
-    macd = ta.macd(df["close"], fast=12, slow=26, signal=9)
-    if macd is not None:
-        out["macd"] = macd["MACD_12_26_9"]
-        out["macd_signal"] = macd["MACDs_12_26_9"]
-    out["atr_14"] = ta.atr(df["high"], df["low"], df["close"], length=14)
-    out["adx"] = ta.adx(df["high"], df["low"], df["close"], length=14)["ADX_14"]
-    out["obv"] = ta.obv(df["close"], df["volume"])
-
-    return out.dropna().reset_index(drop=True)
+    calculator = TechnicalIndicatorCalculator()
+    return calculator.calculate_indicators(df)
