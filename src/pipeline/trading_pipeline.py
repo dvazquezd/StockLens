@@ -228,5 +228,15 @@ class TradingAnalysisPipeline:
             except Exception as e:
                 print(f"\n❌ Error running analysis agent: {type(e).__name__}: {e}")
                 print("   Processed data has been saved, but the agent could not execute.")
+
+            # Generate dashboard
+            try:
+                from src.dashboard.generator import DashboardGenerator
+
+                dashboard = DashboardGenerator(db_path=self.db_path)
+                dashboard.generate_dashboard(days_back=30)
+            except Exception as e:
+                print(f"\n❌ Error generating dashboard: {type(e).__name__}: {e}")
+                print("   Analysis completed, but dashboard generation failed.")
         else:
             print("No assets were processed successfully. Skipping agent execution.")
