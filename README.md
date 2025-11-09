@@ -27,7 +27,11 @@ StockLens is a sophisticated Python-based financial analysis platform that combi
 
 ### 🎨 Professional Dashboard
 - **Minimalist design**: Zara-inspired ultra-clean aesthetic
-- **Interactive charts**: Plotly-powered visualizations
+- **Separated sections**: Portfolio (owned assets) and Seguimiento (watchlist)
+- **P&L tracking**: Automatic calculation of gains/losses per position and portfolio-wide
+- **Portfolio summary**: Aggregated metrics (total value, cost basis, total P&L)
+- **AI portfolio analysis**: Detailed position-specific recommendations from LLM considering entry price, holding period, and current P&L
+- **Interactive charts**: Plotly-powered visualizations with purchase price reference lines
 - **Historical archive**: Browse past analyses and trends
 - **Responsive layout**: Works on desktop, tablet, and mobile
 - **Real-time updates**: Auto-generated after each pipeline run
@@ -81,12 +85,41 @@ Configure your assets in `config/assets_config.json`:
 
 ```json
 [
-  { "symbol": "META",  "source": "yahoo", "interval": "1d", "period": "1y", "in_portfolio": true },
-  { "symbol": "NVDA",  "source": "yahoo", "interval": "1d", "period": "1y", "in_portfolio": false }
+  {
+    "symbol": "FB2A.DE",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": true,
+    "purchase_date": "2025-10-31",
+    "purchase_price": 584.01,
+    "shares": 20
+  },
+  {
+    "symbol": "NVDA",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": true,
+    "purchase_date": "2025-10-29",
+    "purchase_price": 208.00,
+    "shares": 30
+  },
+  {
+    "symbol": "AAPL",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": false
+  }
 ]
 ```
 
-**Portfolio Tracking**: Set `in_portfolio: true` for assets you own, and `false` for watchlist assets. Portfolio assets are visually highlighted in the dashboard.
+**Portfolio Tracking**:
+- Set `in_portfolio: true` for assets you own, and `false` for watchlist assets
+- For portfolio assets, add `purchase_date`, `purchase_price`, and `shares` to track your position
+- The system will automatically calculate cost basis, current value, and P&L (amount and percentage)
+- Portfolio and watchlist assets are displayed in separate sections with different analysis depth
 
 ### Run Analysis
 
@@ -106,8 +139,9 @@ The pipeline will:
 
 Open `dashboard/index.html` in your browser to view:
 - **Market overview**: KPIs and 30-day trends
-- **Portfolio analysis**: Detailed insights per asset
-- **Historical archive**: Browse past recommendations
+- **Portfolio section**: Your owned positions with P&L tracking, entry prices, and personalized AI position analysis
+- **Seguimiento section**: Watchlist assets you're monitoring
+- **Historical archive**: Browse past recommendations and track portfolio performance over time
 
 ### Reset Database
 
@@ -202,7 +236,7 @@ StockLens/
 - **indicators**: Technical indicators linked to market data
 - **signals**: Trading signals with recommendations
 - **agent_runs**: Execution history and performance metrics
-- **recommendations**: AI-generated insights with rationale
+- **recommendations**: AI-generated insights with rationale and portfolio-specific analysis
 
 ### Performance Optimizations
 - **Incremental updates**: Only download new data since last run
@@ -251,6 +285,7 @@ agent = AgentFactory.create_agent(
 - ✅ Natural language explanations
 - ✅ Contextual analysis
 - ✅ Adaptive strategies
+- ✅ **Portfolio-aware analysis**: LLM receives purchase price, entry date, shares, and current P&L for each portfolio asset and provides personalized position management recommendations
 
 ---
 
@@ -262,13 +297,21 @@ agent = AgentFactory.create_agent(
 - Interactive trend charts
 - Performance metrics
 
-### Portfolio Analysis
-- Asset-specific cards with recommendations
-- **Portfolio tracking**: Visual badges for owned assets vs watchlist
-- **Enhanced borders**: Portfolio assets highlighted with thicker borders
-- Technical indicator displays
-- Mini price charts (30-day history)
-- AI-generated rationale
+### Portfolio Section (Owned Assets)
+- **Portfolio summary dashboard**: Total portfolio value, cost basis, aggregated P&L (amount and percentage)
+- **Asset-specific cards** with:
+  - Visual "Portfolio" badges and enhanced borders
+  - **Purchase tracking**: Entry date, entry price, shares owned
+  - **P&L metrics**: Cost basis, current value, profit/loss ($ and %)
+  - **AI position analysis**: Personalized 4-5 sentence recommendations from LLM considering your specific entry point, current P&L, holding period, and technical signals
+  - Technical indicators (RSI, MACD, ADX, Score)
+  - Mini price charts with **purchase price reference line** (dashed)
+  - Standard AI rationale based on technical indicators
+
+### Seguimiento Section (Watchlist)
+- Clean asset cards for assets you're monitoring but don't own
+- Standard technical analysis and AI recommendations
+- Same chart and indicator displays without portfolio metrics
 
 ### Historical Archive
 - Date-based navigation
@@ -349,6 +392,10 @@ See `requirements.txt` for complete list.
 - [x] Historical analysis archive
 - [x] Database reset utility
 - [x] Portfolio vs watchlist tracking
+- [x] P&L tracking with purchase price monitoring
+- [x] Portfolio-specific AI analysis considering entry points
+- [x] Separated Portfolio and Watchlist sections
+- [x] Portfolio summary with aggregated metrics
 
 ### In Progress 🚧
 - [ ] Real-time WebSocket feeds
