@@ -231,9 +231,9 @@ class DashboardGenerator:
             if rec in data_by_rec:
                 data_by_rec[rec][date] = count
 
-        # Create Plotly traces
+        # Create Plotly traces with minimalist colors
         traces = []
-        colors = {'buy': '#1A7B4F', 'sell': '#C73E1D', 'hold': '#6B6B6B'}
+        colors = {'buy': '#0A8754', 'sell': '#D4423F', 'hold': '#8B8B8B'}
 
         for rec_type, color in colors.items():
             dates_list = sorted(data_by_rec[rec_type].keys())
@@ -245,8 +245,8 @@ class DashboardGenerator:
                 'type': 'scatter',
                 'mode': 'lines+markers',
                 'name': rec_type.upper(),
-                'line': {'color': color, 'width': 2},
-                'marker': {'size': 6}
+                'line': {'color': color, 'width': 1.5},
+                'marker': {'size': 5, 'color': color}
             })
 
         return json.dumps(traces)
@@ -353,9 +353,10 @@ class DashboardGenerator:
             'y': closes,
             'type': 'scatter',
             'mode': 'lines',
-            'line': {'color': '#1A1A1A', 'width': 1.5},
+            'line': {'color': '#000000', 'width': 1.2},
             'fill': 'tozeroy',
-            'fillcolor': 'rgba(26, 26, 26, 0.1)'
+            'fillcolor': 'rgba(0, 0, 0, 0.03)',
+            'showlegend': False
         }]
 
         return json.dumps(trace)
