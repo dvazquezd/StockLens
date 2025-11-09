@@ -8,7 +8,7 @@ import pandas as pd
 
 from config.config import (
     AGENT_MODE, ASSETS_CONFIG, DEFAULT_INTERVAL, DEFAULT_LIMIT, DEFAULT_PERIOD,
-    LLM_MODEL, LLM_PROVIDER, PROCESSED_PATH, RAW_PATH, AgentMode
+    LLM_MODEL, LLM_PROVIDER, PROCESSED_PATH, RAW_PATH
 )
 from src.agent.agent_llm import run_agent_llm
 from src.agent.agent_local import run_agent_local
@@ -106,7 +106,7 @@ class TradingAnalysisPipeline:
 
         return raw_data, indicators_data, signals_data
 
-    def run_analysis_agent(self, mode: AgentMode = None) -> None:
+    def run_analysis_agent(self, mode: Optional[str] = None) -> None:
         """
         Execute the appropriate analysis agent.
 
