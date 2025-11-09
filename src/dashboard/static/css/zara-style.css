@@ -312,6 +312,137 @@ section {
     border-top: 1px solid var(--divider);
 }
 
+/* Portfolio Summary Section */
+.portfolio-summary {
+    background: var(--bg-off-white);
+    padding: 60px;
+    margin-bottom: 60px;
+    border: 1px solid var(--divider);
+}
+
+.summary-title {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    color: var(--text-black);
+    margin-bottom: 40px;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 30px;
+}
+
+.summary-card {
+    background: var(--bg-white);
+    border: 1px solid var(--divider);
+    padding: 40px 30px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.summary-card:hover {
+    border-color: var(--text-black);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.summary-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    color: var(--text-gray);
+    margin-bottom: 18px;
+    font-weight: 500;
+}
+
+.summary-value {
+    font-size: 32px;
+    font-weight: 200;
+    color: var(--text-black);
+    letter-spacing: -0.5px;
+}
+
+/* Portfolio Details in Asset Cards */
+.portfolio-details {
+    margin-bottom: 30px;
+    padding: 30px;
+    background: var(--bg-off-white);
+    border: 1px solid var(--divider);
+}
+
+.portfolio-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+}
+
+.portfolio-metric {
+    display: flex;
+    flex-direction: column;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--divider);
+}
+
+.portfolio-metric:nth-child(1),
+.portfolio-metric:nth-child(2),
+.portfolio-metric:nth-child(3) {
+    border-top: none;
+}
+
+.metric-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-gray);
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.metric-value {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-black);
+    letter-spacing: 0.2px;
+}
+
+/* P&L Color Indicators */
+.pnl-positive {
+    color: var(--accent-green) !important;
+}
+
+.pnl-negative {
+    color: var(--accent-red) !important;
+}
+
+/* Portfolio Analysis Section */
+.portfolio-analysis {
+    margin-bottom: 30px;
+    padding: 30px;
+    background: var(--bg-white);
+    border: 1px solid var(--divider);
+    border-left: 3px solid var(--text-black);
+}
+
+.analysis-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    color: var(--text-black);
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.analysis-content {
+    font-size: 12px;
+    line-height: 1.9;
+    color: var(--text-dark);
+    font-weight: 400;
+    letter-spacing: 0.2px;
+}
+
 /* Historical Navigation - Gallery Style */
 .historical-nav {
     padding: 80px 0;
@@ -396,6 +527,14 @@ footer {
     .overview-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .portfolio-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 @media (max-width: 768px) {
@@ -415,6 +554,22 @@ footer {
 
     .overview-grid {
         grid-template-columns: 1fr;
+    }
+
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .portfolio-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .portfolio-summary {
+        padding: 40px 30px;
+    }
+
+    .portfolio-details {
+        padding: 20px;
     }
 
     .assets-grid {

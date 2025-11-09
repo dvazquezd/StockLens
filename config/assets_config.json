@@ -1,4 +1,29 @@
 [
-  { "symbol": "META",  "source": "yahoo",   "interval": "1d", "period": "1y", "in_portfolio": true },
-  { "symbol": "NVDA",  "source": "yahoo",   "interval": "1d", "period": "1y", "in_portfolio": true }
+  {
+    "symbol": "FB2A.DE",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": true,
+    "purchase_date": "2025-10-31",
+    "purchase_price": 584.01,
+    "shares": 20
+  },
+  {
+    "symbol": "NVDA",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": true,
+    "purchase_date": "2025-10-29",
+    "purchase_price": 208.00,
+    "shares": 30
+  },
+  {
+    "symbol": "AAPL",
+    "source": "yahoo",
+    "interval": "1d",
+    "period": "1y",
+    "in_portfolio": false
+  }
 ]
